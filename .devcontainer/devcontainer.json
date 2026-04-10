@@ -1,0 +1,17 @@
+{
+  "name": "ocel-ocp",
+  "image": "pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime",
+  "runArgs": ["--gpus", "all", "--privileged"],
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/ocel-ocp,type=bind,consistency=cached",
+  "workspaceFolder": "/workspace/ocel-ocp",
+  "postCreateCommand": "pip install --upgrade pip setuptools wheel && pip install pytorch-frame torch-geometric pyg-lib torch-scatter torch-sparse torch-cluster -f https://data.pyg.org/whl/torch-2.9.1+cu128.html relbench optuna optuna-integration scikit-learn pandas scipy matplotlib seaborn plotly tqdm networkx transformers sentence-transformers datasets xgboost lightgbm catboost ipython ipykernel duckdb pyarrow clearml ijson pysimdjson sqlalchemy graphviz && pip freeze > requirements.txt",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter"
+      ]
+    }
+  }
+}
