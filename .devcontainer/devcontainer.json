@@ -10,7 +10,9 @@
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "ms-toolsai.jupyter"
+        "ms-toolsai.jupyter",
+        "openai.chatgpt",
+        "anthropic.claude-code"
       ]
     }
   }
