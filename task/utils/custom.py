@@ -58,11 +58,11 @@ class MEntityTask(BaseTask):
         for fn in metrics:
             metric_name = fn.__name__
             if self.task_type == TaskType.MULTICLASS_CLASSIFICATION and metric_name == "f1":
-                results["multiclass_f1"] = skm.f1_score(
+                results["multiclass_f1"] = float(skm.f1_score(
                     target,
                     pred.argmax(axis=1),
                     average="macro",
-                )
+                ))
                 continue
             results[metric_name] = fn(target, pred)
 
@@ -154,7 +154,7 @@ def _get_target_tensor(task: "MEntityTask", df: pd.DataFrame) -> torch.Tensor:
     if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
         return torch.from_numpy(df[task.target_col].to_numpy(dtype=int))
     if task.task_type == TaskType.MULTILABEL_CLASSIFICATION:
-        return torch.from_numpy(np.stack(df[task.target_col].values))
+        return torch.from_numpy(np.stack(df[task.target_col].values)) # type: ignore
     return torch.from_numpy(df[task.target_col].to_numpy(dtype=float))
 
 
