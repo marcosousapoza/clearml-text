@@ -76,6 +76,8 @@ libarchive-c @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-bui
 libmambapy @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_libmambapy_1760729597/work/libmambapy
 lief @ file:///home/conda/feedstock_root/build_artifacts/lief_1760811648956/work/api/python
 lightgbm==4.6.0
+lightning==2.6.1
+lightning-utilities==0.15.3
 lintrunner==0.12.7
 Mako==1.3.10
 markdown-it-py==4.0.0
@@ -141,6 +143,7 @@ PySocks @ file:///home/conda/feedstock_root/build_artifacts/pysocks_173321723672
 python-dateutil==2.9.0.post0
 python-etcd==0.4.5
 pytorch-frame==0.3.0
+pytorch-lightning==2.6.1
 pytz @ file:///home/conda/feedstock_root/build_artifacts/pytz_1742920838005/work
 PyYAML @ file:///home/conda/feedstock_root/build_artifacts/pyyaml_1758891829620/work
 pyzmq==27.1.0
@@ -173,6 +176,7 @@ torch_scatter==2.1.2+pt29cu128
 torch_sparse==0.6.18+pt29cu128
 torchaudio==2.9.1+cu128
 torchelastic==0.2.2
+torchmetrics==1.9.0
 torchvision==0.24.1+cu128
 tornado==6.5.5
 tqdm @ file:///home/conda/feedstock_root/build_artifacts/tqdm_1735661334605/work
