@@ -8,16 +8,6 @@ from data.wrapper import check_dbs
 
 
 @check_dbs
-def table_row_counts(db: Database) -> pd.DataFrame:
-    """Summarize row and column counts for every table in the database."""
-
-    rows = []
-    for name, table in db.table_dict.items():
-        rows.append({"table": name, "rows": len(table.df), "columns": len(table.df.columns)})
-    return pd.DataFrame(rows).sort_values("table", kind="stable").reset_index(drop=True)
-
-
-@check_dbs
 def describe_tables(db: Database) -> dict[str, pd.DataFrame]:
     """Return a compact schema report for table sizes and column dtypes.
 
@@ -31,10 +21,19 @@ def describe_tables(db: Database) -> dict[str, pd.DataFrame]:
         for column, dtype in table.df.dtypes.astype(str).items():
             rows.append({"table": name, "column": column, "dtype": dtype})
     schema = pd.DataFrame(rows)
+    table_rows = [
+        {"table": name, "rows": len(table.df), "columns": len(table.df.columns)}
+        for name, table in db.table_dict.items()
+    ]
     return {
-        "table_overview": table_row_counts(db).assign(
-            num_columns=lambda frame: frame["table"].map(
-                {name: len(table.df.columns) for name, table in db.table_dict.items()}
+        "table_overview": (
+            pd.DataFrame(table_rows)
+            .sort_values("table", kind="stable")
+            .reset_index(drop=True)
+            .assign(
+                num_columns=lambda frame: frame["table"].map(
+                    {name: len(table.df.columns) for name, table in db.table_dict.items()}
+                )
             )
         ),
         "column_dtypes": schema.sort_values(["table", "column"], kind="stable").reset_index(drop=True),
@@ -74,4 +73,4 @@ def inspect_attribute_dtypes(
     return out
 
 
-__all__ = ["describe_tables", "inspect_attribute_dtypes", "table_row_counts"]
+__all__ = ["describe_tables", "inspect_attribute_dtypes"]

@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 from torch_geometric.seed import seed_everything
 
-from relbench.base import EntityTask, Table, TaskType
+from relbench.base import Table, TaskType
 from relbench.datasets import get_dataset
 from relbench.tasks import get_task, get_task_names
 
@@ -17,9 +17,10 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import data.dataset  # noqa: F401
-import task  # noqa: F401
-from data.dataset._utils import DEFAULT_CACHE_ROOT, configure_cache_environment
+from data.cache import configure_cache_environment
+from data.dataset import register_all_datasets
+from task import register_tasks
+from task.utils.custom import MEntityTask
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -42,21 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
-        "--download",
-        action="store_true",
-        help="Use RelBench download mode instead of local cache generation.",
-    )
-    parser.add_argument(
         "--cache-root",
         type=Path,
-        default=DEFAULT_CACHE_ROOT,
-        help="Shared cache root. Defaults to $HOME/scratch/relbench.",
+        default=None,
+        help="Optional cache root override. Defaults to CACHE_ROOT from .env.",
     )
     return parser
-
-
-def configure_environment(cache_root: Path | None) -> None:
-    configure_cache_environment(cache_root)
 
 
 def resolve_task_names(args: argparse.Namespace, dataset_name: str) -> list[str]:
@@ -83,11 +75,6 @@ def combine_train_val_table(train_table: Table, val_table: Table) -> Table:
     )
 
 
-def fkey_col(table: Table) -> str | None:
-    keys = list(table.fkey_col_to_pkey_table.keys())
-    return keys[0] if keys else None
-
-
 def scalar_majority(values: pd.Series) -> Any:
     mode_values = values.mode(dropna=True)
     if not mode_values.empty:
@@ -95,9 +82,10 @@ def scalar_majority(values: pd.Series) -> Any:
     return values.iloc[0]
 
 
-def predict_baseline(task: EntityTask, train_table: Table, pred_table: Table, name: str) -> np.ndarray:
+def predict_baseline(task: MEntityTask, train_table: Table, pred_table: Table, name: str) -> np.ndarray:
     target = train_table.df[task.target_col]
-    key = fkey_col(train_table)
+    keys = list(train_table.fkey_col_to_pkey_table.keys())
+    key = keys[0] if keys else None
 
     if name == "global_zero":
         return np.zeros(len(pred_table.df), dtype=float)
@@ -136,7 +124,7 @@ def predict_baseline(task: EntityTask, train_table: Table, pred_table: Table, na
 
     if name == "random":
         if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
-            pred = np.random.rand(len(pred_table.df), task.num_classes)
+            pred = np.random.rand(len(pred_table.df), task.num_classes)# type: ignore
             row_sums = pred.sum(axis=1, keepdims=True)
             return pred / row_sums
         return np.random.rand(len(pred_table.df))
@@ -144,7 +132,7 @@ def predict_baseline(task: EntityTask, train_table: Table, pred_table: Table, na
     if name == "majority":
         majority_value = scalar_majority(target)
         if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
-            pred = np.zeros((len(pred_table.df), task.num_classes), dtype=float)
+            pred = np.zeros((len(pred_table.df), task.num_classes), dtype=float)# type: ignore
             pred[:, int(majority_value)] = 1.0
             return pred
         if isinstance(majority_value, (bool, np.bool_)):
@@ -165,7 +153,7 @@ def predict_baseline(task: EntityTask, train_table: Table, pred_table: Table, na
         merged = pred_table.df.merge(grouped, how="left", on=key)
         default_label = int(scalar_majority(target))
         labels = merged["__target__"].fillna(default_label).astype(int).to_numpy()
-        pred = np.zeros((len(pred_table.df), task.num_classes), dtype=float)
+        pred = np.zeros((len(pred_table.df), task.num_classes), dtype=float)# type: ignore
         pred[np.arange(len(pred_table.df)), labels] = 1.0
         return pred
 
@@ -173,7 +161,7 @@ def predict_baseline(task: EntityTask, train_table: Table, pred_table: Table, na
 
 
 def evaluate_split(
-    task: EntityTask,
+    task: MEntityTask,
     train_table: Table,
     pred_table: Table,
     baseline_name: str,
@@ -183,7 +171,7 @@ def evaluate_split(
     return task.evaluate(pred, eval_table)
 
 
-def baseline_names(task: EntityTask) -> list[str]:
+def baseline_names(task: MEntityTask) -> list[str]:
     if task.task_type == TaskType.REGRESSION:
         return [
             "global_zero",
@@ -201,10 +189,10 @@ def baseline_names(task: EntityTask) -> list[str]:
     )
 
 
-def evaluate_task(dataset_name: str, task_name: str, download: bool) -> dict[str, Any]:
-    task = get_task(dataset_name, task_name, download=download)
-    if not isinstance(task, EntityTask):
-        raise TypeError(f"Task {task_name!r} is not an EntityTask.")
+def evaluate_task(dataset_name: str, task_name: str) -> dict[str, Any]:
+    task = get_task(dataset_name, task_name, download=False)
+    if not isinstance(task, MEntityTask):
+        raise TypeError(f"Task {task_name!r} is not an MEntityTask.")
 
     train_table = task.get_table("train")
     val_table = task.get_table("val")
@@ -231,19 +219,20 @@ def evaluate_task(dataset_name: str, task_name: str, download: bool) -> dict[str
 
 def main() -> None:
     args = build_parser().parse_args()
-    configure_environment(args.cache_root)
+    resolved_cache_root = configure_cache_environment(args.cache_root)
+    register_all_datasets(resolved_cache_root)
+    register_tasks(resolved_cache_root)
     seed_everything(args.seed)
     np.random.seed(args.seed)
 
     dataset_name = args.dataset
     task_names = resolve_task_names(args, dataset_name)
-    dataset = get_dataset(dataset_name, download=args.download)
+    dataset = get_dataset(dataset_name, download=False)
     dataset.get_db()
 
     summary: dict[str, Any] = {
         "dataset": dataset_name,
         "seed": args.seed,
-        "download": args.download,
         "tasks": {},
     }
 
@@ -252,7 +241,6 @@ def main() -> None:
         summary["tasks"][task_name] = evaluate_task(
             dataset_name=dataset_name,
             task_name=task_name,
-            download=args.download,
         )
 
     print(json.dumps(summary, indent=2, sort_keys=True))

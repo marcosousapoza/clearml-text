@@ -9,7 +9,7 @@ from .composition import (
     objects_per_event_distribution,
     type_counts,
 )
-from .io import configure_plot_style, dataset_output_dir, save_figure
+from .io import configure_plot_style, save_figure
 from .influence import (
     compute_object_trace_lengths,
     event_share_by_min_object_trace_length,
@@ -39,7 +39,6 @@ __all__ = [
     "compute_object_trace_lengths",
     "object_share_above_trace_length",
     "object_type_occupation_above_trace_length",
-    "dataset_output_dir",
     "describe_tables",
     "e2o_degree_summary",
     "event_histogram",

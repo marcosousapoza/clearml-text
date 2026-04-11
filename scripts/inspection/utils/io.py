@@ -24,17 +24,6 @@ def configure_plot_style() -> None:
     )
 
 
-def dataset_output_dir(
-    dataset_name: str,
-    base_dir: str | Path = Path("out") / "inspection",
-) -> Path:
-    """Return the output directory for a dataset and create it if needed."""
-
-    out_dir = Path(base_dir) / dataset_name
-    out_dir.mkdir(parents=True, exist_ok=True)
-    return out_dir
-
-
 def save_figure(
     fig: Any,
     *,
@@ -51,7 +40,8 @@ def save_figure(
     """
 
     written: list[Path] = []
-    out_dir = dataset_output_dir(dataset_name, base_dir=base_dir)
+    out_dir = Path(base_dir) / dataset_name
+    out_dir.mkdir(parents=True, exist_ok=True)
     for fmt in formats:
         target = out_dir / f"{stem}.{fmt}"
         target.parent.mkdir(parents=True, exist_ok=True)

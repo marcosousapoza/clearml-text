@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from functools import wraps
 import inspect
 from typing import Any, Callable, Iterable, ParamSpec, TypeVar, get_args, get_origin, get_type_hints
@@ -40,12 +38,6 @@ _NON_NULL_COLUMNS: dict[str, tuple[str, ...]] = {
 
 P = ParamSpec("P")
 R = TypeVar("R")
-
-
-def _require_tables(db: Database, names: Iterable[str]) -> None:
-    missing = [name for name in names if name not in db.table_dict]
-    if missing:
-        raise ValueError(f"Database missing required table(s): {', '.join(repr(name) for name in missing)}.")
 
 
 def _require_columns(df: pd.DataFrame, columns: Iterable[str], table_name: str) -> None:
@@ -97,7 +89,9 @@ def check_db(db: Database) -> Database:
     - link tables do not contain dangling references
     """
 
-    _require_tables(db, (EVENT_TABLE, OBJECT_TABLE, E2O_TABLE))
+    missing = [name for name in (EVENT_TABLE, OBJECT_TABLE, E2O_TABLE) if name not in db.table_dict]
+    if missing:
+        raise ValueError(f"Database missing required table(s): {', '.join(repr(name) for name in missing)}.")
 
     event_df = db.table_dict[EVENT_TABLE].df
     object_df = db.table_dict[OBJECT_TABLE].df

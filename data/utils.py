@@ -22,12 +22,6 @@ from .const import (
 from .wrapper import check_dbs
 
 
-def _resolve_stype(stype_mod: Any, value: Any) -> Any:
-    if isinstance(value, str):
-        return getattr(stype_mod, value, value)
-    return value
-
-
 Entity = Literal["event", "object"]
 
 
@@ -289,7 +283,7 @@ def get_stype_proposal(
                 continue
             for col, st in col_map.items():
                 if col in table_cols:
-                    resolved = _resolve_stype(stype_mod, st)
+                    resolved = getattr(stype_mod, st, st) if isinstance(st, str) else st
                     if (
                         resolved is categorical
                         and table.df[col].notna().sum() == 0

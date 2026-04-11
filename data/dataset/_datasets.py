@@ -9,6 +9,7 @@ from torch_frame import stype
 
 from ._utils import unzip_file, parse_ocel_to_database
 from ..datareader.relbench_tables import apply_default_column_dtypes
+from ..const import E2O_TABLE, O2O_TABLE, OBJECT_ID_COL, OBJECT_TABLE, O2O_DST_COL, O2O_SRC_COL
 from ..wrapper import check_dbs
 
 
@@ -27,6 +28,61 @@ def _drop_attr_columns(db: Database, columns: set[str]) -> Database:
             df = table.df.drop(columns=drop_cols) if drop_cols else table.df
         else:
             df = table.df
+        out[name] = Table(
+            df=df,
+            time_col=table.time_col,
+            pkey_col=table.pkey_col,
+            fkey_col_to_pkey_table=table.fkey_col_to_pkey_table,
+        )
+    return apply_default_column_dtypes(Database(table_dict=out))
+
+
+def _restore_missing_linked_objects(db: Database, source_db: Database) -> Database:
+    """
+    Restore object and object-attribute rows for object IDs referenced by link tables.
+
+    Some datasets are filtered by time after OCEL parsing. When the object table is
+    time-filtered more aggressively than link tables, surviving `e2o`/`o2o` rows can
+    reference objects that no longer exist in the filtered `object` table. We restore
+    those object rows from the unfiltered source database so the relational graph
+    remains valid without dropping observed event-object links.
+    """
+    object_df = db.table_dict[OBJECT_TABLE].df
+    linked_ids = set(db.table_dict[E2O_TABLE].df[OBJECT_ID_COL].dropna().tolist())
+    o2o_table = db.table_dict.get(O2O_TABLE)
+    if o2o_table is not None:
+        linked_ids.update(o2o_table.df[O2O_SRC_COL].dropna().tolist())
+        linked_ids.update(o2o_table.df[O2O_DST_COL].dropna().tolist())
+
+    current_ids = set(object_df[OBJECT_ID_COL].dropna().tolist())
+    missing_ids = linked_ids - current_ids
+    if not missing_ids:
+        return db
+
+    source_object_df = source_db.table_dict[OBJECT_TABLE].df
+    restored_object_df = pd.concat(
+        [
+            object_df,
+            source_object_df[source_object_df[OBJECT_ID_COL].isin(missing_ids)],
+        ],
+        ignore_index=True,
+    ).drop_duplicates(subset=[OBJECT_ID_COL], keep="first")
+
+    out: dict[str, Table] = {}
+    for name, table in db.table_dict.items():
+        df = table.df
+        if name == OBJECT_TABLE:
+            df = restored_object_df
+        elif name.startswith("object_attr_") and OBJECT_ID_COL in df.columns:
+            source_attr_df = source_db.table_dict[name].df if name in source_db.table_dict else None
+            if source_attr_df is not None:
+                df = pd.concat(
+                    [
+                        df,
+                        source_attr_df[source_attr_df[OBJECT_ID_COL].isin(missing_ids)],
+                    ],
+                    ignore_index=True,
+                ).drop_duplicates()
         out[name] = Table(
             df=df,
             time_col=table.time_col,
@@ -350,14 +406,15 @@ class BPI2019(OCELDataset):
         return json_cache_dir
 
     def make_db(self) -> Database:
-        db = parse_ocel_to_database(
+        raw_db = parse_ocel_to_database(
             uri=self._uri,
             file_format=self._file_format,
             dataset_name=self.__class__.__name__,
             pre_parse_fn=self._pre_parsing,
         )
         # filter strange periods
-        db = db.from_(pd.Timestamp("2018-01-01")).upto(pd.Timestamp("2019-01-30"))
+        db = raw_db.from_(pd.Timestamp("2018-01-01")).upto(pd.Timestamp("2019-01-30"))
+        db = _restore_missing_linked_objects(db, source_db=raw_db)
         return _drop_attr_columns(db, self._drop_attr_cols)
 
     def set_stype(

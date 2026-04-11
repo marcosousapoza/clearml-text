@@ -1,47 +1,13 @@
 import os
-from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import urlparse
 import zipfile
 
 import requests
 
+from ..cache import RAW_OCEL_DIRNAME, get_cache_root
 from ..datareader.json._reader import JSONDataReader
 from ..datareader.base import BaseDataReader
-
-DEFAULT_CACHE_ROOT = Path.home() / "scratch" / "relbench"
-RAW_OCEL_CACHE_DIRNAME = "raw_ocel"
-
-
-def get_cache_root() -> Path:
-    """Return the shared project cache root."""
-    return Path(os.environ.get("RELBENCH_CACHE_DIR", DEFAULT_CACHE_ROOT)).expanduser().resolve()
-
-
-def configure_cache_environment(cache_root: str | Path | None = None) -> Path:
-    """
-    Configure the shared cache environment for both RelBench artifacts and raw OCEL downloads.
-    """
-    resolved_cache_root = (
-        Path(cache_root).expanduser().resolve()
-        if cache_root is not None
-        else get_cache_root()
-    )
-    os.environ["RELBENCH_CACHE_DIR"] = str(resolved_cache_root)
-    os.environ["OCEL_CACHE"] = str(resolved_cache_root / RAW_OCEL_CACHE_DIRNAME)
-    return resolved_cache_root
-
-
-def get_raw_ocel_cache_dir() -> str:
-    """
-    Return the cache directory for raw OCEL downloads.
-
-    `OCEL_CACHE` overrides the default location. Otherwise, raw downloads live under
-    the shared RelBench cache root.
-    """
-    if "OCEL_CACHE" in os.environ:
-        return str(Path(os.environ["OCEL_CACHE"]).expanduser().resolve())
-    return str(get_cache_root() / RAW_OCEL_CACHE_DIRNAME)
 
 
 def unzip_file(zip_path: str, extract_to: Optional[str] = None) -> None:
@@ -122,7 +88,7 @@ def parse_ocel_to_database(
     Returns:
         relbench Database instance
     """
-    cache_dir = get_raw_ocel_cache_dir()
+    cache_dir = str(get_cache_root() / RAW_OCEL_DIRNAME)
 
     # Download file
     download_path = download_file(uri, cache_dir)

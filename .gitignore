@@ -8,10 +8,20 @@
 
 # Secret access tokens
 clearml.conf
+clearml*.conf
+*.secret
+*.secrets
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.*
+secrets.*
 /.temp/
 
 # LLM usage files
-.claude
+.claude/
+.codex/
 .ai-context
 CLAUDE.md
 .cursor
@@ -24,6 +34,9 @@ CLAUDE.md
 *.codex
 *.serena
 AGENTS.md
+
+# Local editor settings
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -156,6 +169,9 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
+!.env.template
 .venv
 env/
 venv/

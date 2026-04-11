@@ -1,15 +1,10 @@
-import os
+from pathlib import Path
 from typing import cast
 
-from ._utils import DEFAULT_CACHE_ROOT, configure_cache_environment
-
-# Set RELBENCH_CACHE_DIR before registering datasets so that
-# register_dataset captures the correct cache_dir at import time.
-if "RELBENCH_CACHE_DIR" not in os.environ:
-    os.environ["RELBENCH_CACHE_DIR"] = str(DEFAULT_CACHE_ROOT)
+from ..cache import configure_cache_environment
 
 from relbench.base import Dataset
-from relbench.datasets import register_dataset
+from relbench.datasets import get_dataset, register_dataset
 
 from ._datasets import (
     OrderManagementDataset,
@@ -19,11 +14,29 @@ from ._datasets import (
 )
 
 
-def register_all_datasets() -> None:
-    register_dataset("bpi2017", cast(Dataset, BPI2017))
-    register_dataset("bpi2019", cast(Dataset, BPI2019))
-    register_dataset("order_management", cast(Dataset, OrderManagementDataset))
-    register_dataset("container_logistics", cast(Dataset, ContainerLogisticsDataset))
+def register_all_datasets(cache_root: str | Path | None = None) -> None:
+    resolved_cache_root = configure_cache_environment(cache_root)
+    get_dataset.cache_clear()
+    register_dataset(
+        "bpi2017",
+        cast(Dataset, BPI2017),
+        cache_dir=str(resolved_cache_root / "bpi2017"),
+    )
+    register_dataset(
+        "bpi2019",
+        cast(Dataset, BPI2019),
+        cache_dir=str(resolved_cache_root / "bpi2019"),
+    )
+    register_dataset(
+        "order_management",
+        cast(Dataset, OrderManagementDataset),
+        cache_dir=str(resolved_cache_root / "order_management"),
+    )
+    register_dataset(
+        "container_logistics",
+        cast(Dataset, ContainerLogisticsDataset),
+        cache_dir=str(resolved_cache_root / "container_logistics"),
+    )
 
 
 register_all_datasets()
