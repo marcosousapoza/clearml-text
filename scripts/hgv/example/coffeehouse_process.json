@@ -1,0 +1,272 @@
+{
+  "eventTypes": [
+    {"name": "OrderPlaced",       "attributes": []},
+    {"name": "PaymentProcessed",  "attributes": []},
+    {"name": "OrderConfirmed",    "attributes": []},
+    {"name": "DrinkQueued",       "attributes": []},
+    {"name": "DrinkPrepared",     "attributes": []},
+    {"name": "CustomerNotified",  "attributes": []},
+    {"name": "OrderPickedUp",     "attributes": []},
+    {"name": "OrderCancelled",    "attributes": []},
+    {"name": "RefundIssued",      "attributes": []}
+  ],
+  "objectTypes": [
+    {"name": "Customer", "attributes": []},
+    {"name": "Order",    "attributes": []},
+    {"name": "Drink",    "attributes": []},
+    {"name": "Barista",  "attributes": []}
+  ],
+  "events": [
+    {
+      "id": "E1", "type": "OrderPlaced", "time": "2024-01-15T08:00:00Z",
+      "relationships": [
+        {"objectId": "C1", "qualifier": "customer"},
+        {"objectId": "O1", "qualifier": "order"},
+        {"objectId": "D1", "qualifier": "drink"}
+      ]
+    },
+    {
+      "id": "E2", "type": "PaymentProcessed", "time": "2024-01-15T08:01:00Z",
+      "relationships": [
+        {"objectId": "C1", "qualifier": "customer"},
+        {"objectId": "O1", "qualifier": "order"}
+      ]
+    },
+    {
+      "id": "E3", "type": "OrderConfirmed", "time": "2024-01-15T08:02:00Z",
+      "relationships": [
+        {"objectId": "O1", "qualifier": "order"},
+        {"objectId": "B1", "qualifier": "barista"}
+      ]
+    },
+    {
+      "id": "E4", "type": "DrinkQueued", "time": "2024-01-15T08:03:00Z",
+      "relationships": [
+        {"objectId": "O1", "qualifier": "order"},
+        {"objectId": "D1", "qualifier": "drink"},
+        {"objectId": "B1", "qualifier": "barista"}
+      ]
+    },
+    {
+      "id": "E5", "type": "OrderPlaced", "time": "2024-01-15T08:04:00Z",
+      "relationships": [
+        {"objectId": "C2", "qualifier": "customer"},
+        {"objectId": "O2", "qualifier": "order"},
+        {"objectId": "D2", "qualifier": "drink"}
+      ]
+    },
+    {
+      "id": "E6", "type": "PaymentProcessed", "time": "2024-01-15T08:05:00Z",
+      "relationships": [
+        {"objectId": "C2", "qualifier": "customer"},
+        {"objectId": "O2", "qualifier": "order"}
+      ]
+    },
+    {
+      "id": "E7", "type": "OrderConfirmed", "time": "2024-01-15T08:06:00Z",
+      "relationships": [
+        {"objectId": "O2", "qualifier": "order"},
+        {"objectId": "B1", "qualifier": "barista"}
+      ]
+    },
+    {
+      "id": "E14", "type": "OrderPlaced", "time": "2024-01-15T08:07:00Z",
+      "relationships": [
+        {"objectId": "C3", "qualifier": "customer"},
+        {"objectId": "O3", "qualifier": "order"},
+        {"objectId": "D3", "qualifier": "drink"},
+        {"objectId": "D4", "qualifier": "drink"}
+      ]
+    },
+    {
+      "id": "E8", "type": "DrinkQueued", "time": "2024-01-15T08:07:30Z",
+      "relationships": [
+        {"objectId": "O2", "qualifier": "order"},
+        {"objectId": "D2", "qualifier": "drink"},
+        {"objectId": "B1", "qualifier": "barista"}
+      ]
+    },
+    {
+      "id": "E15", "type": "PaymentProcessed", "time": "2024-01-15T08:08:00Z",
+      "relationships": [
+        {"objectId": "C3", "qualifier": "customer"},
+        {"objectId": "O3", "qualifier": "order"}
+      ]
+    },
+    {
+      "id": "E16", "type": "OrderConfirmed", "time": "2024-01-15T08:09:00Z",
+      "relationships": [
+        {"objectId": "O3", "qualifier": "order"},
+        {"objectId": "B2", "qualifier": "barista"}
+      ]
+    },
+    {
+      "id": "E17", "type": "DrinkQueued", "time": "2024-01-15T08:10:00Z",
+      "relationships": [
+        {"objectId": "O3", "qualifier": "order"},
+        {"objectId": "D3", "qualifier": "drink"},
+        {"objectId": "B2", "qualifier": "barista"}
+      ]
+    },
+    {
+      "id": "E9", "type": "DrinkPrepared", "time": "2024-01-15T08:10:30Z",
+      "relationships": [
+        {"objectId": "D1", "qualifier": "drink"},
+        {"objectId": "B1", "qualifier": "barista"}
+      ]
+    },
+    {
+      "id": "E18", "type": "DrinkQueued", "time": "2024-01-15T08:11:00Z",
+      "relationships": [
+        {"objectId": "O3", "qualifier": "order"},
+        {"objectId": "D4", "qualifier": "drink"},
+        {"objectId": "B2", "qualifier": "barista"}
+      ]
+    },
+    {
+      "id": "E10", "type": "CustomerNotified", "time": "2024-01-15T08:12:00Z",
+      "relationships": [
+        {"objectId": "C1", "qualifier": "customer"},
+        {"objectId": "O1", "qualifier": "order"},
+        {"objectId": "D1", "qualifier": "drink"}
+      ]
+    },
+    {
+      "id": "E19", "type": "DrinkPrepared", "time": "2024-01-15T08:12:30Z",
+      "relationships": [
+        {"objectId": "D3", "qualifier": "drink"},
+        {"objectId": "B2", "qualifier": "barista"}
+      ]
+    },
+    {
+      "id": "E20", "type": "DrinkPrepared", "time": "2024-01-15T08:13:00Z",
+      "relationships": [
+        {"objectId": "D4", "qualifier": "drink"},
+        {"objectId": "B2", "qualifier": "barista"}
+      ]
+    },
+    {
+      "id": "E11", "type": "OrderCancelled", "time": "2024-01-15T08:13:30Z",
+      "relationships": [
+        {"objectId": "C2", "qualifier": "customer"},
+        {"objectId": "O2", "qualifier": "order"},
+        {"objectId": "D2", "qualifier": "drink"}
+      ]
+    },
+    {
+      "id": "E21", "type": "CustomerNotified", "time": "2024-01-15T08:14:00Z",
+      "relationships": [
+        {"objectId": "C3", "qualifier": "customer"},
+        {"objectId": "O3", "qualifier": "order"},
+        {"objectId": "D3", "qualifier": "drink"},
+        {"objectId": "D4", "qualifier": "drink"}
+      ]
+    },
+    {
+      "id": "E22", "type": "OrderPickedUp", "time": "2024-01-15T08:15:00Z",
+      "relationships": [
+        {"objectId": "C3", "qualifier": "customer"},
+        {"objectId": "O3", "qualifier": "order"},
+        {"objectId": "D3", "qualifier": "drink"},
+        {"objectId": "D4", "qualifier": "drink"}
+      ]
+    },
+    {
+      "id": "E12", "type": "OrderPickedUp", "time": "2024-01-15T08:16:00Z",
+      "relationships": [
+        {"objectId": "C1", "qualifier": "customer"},
+        {"objectId": "O1", "qualifier": "order"},
+        {"objectId": "D1", "qualifier": "drink"}
+      ]
+    },
+    {
+      "id": "E13", "type": "RefundIssued", "time": "2024-01-15T08:18:00Z",
+      "relationships": [
+        {"objectId": "C2", "qualifier": "customer"},
+        {"objectId": "O2", "qualifier": "order"}
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "id": "C1", "type": "Customer",
+      "relationships": [
+        {"objectId": "O1", "qualifier": "places"}
+      ]
+    },
+    {
+      "id": "C2", "type": "Customer",
+      "relationships": [
+        {"objectId": "O2", "qualifier": "places"}
+      ]
+    },
+    {
+      "id": "C3", "type": "Customer",
+      "relationships": [
+        {"objectId": "O3", "qualifier": "places"}
+      ]
+    },
+    {
+      "id": "O1", "type": "Order",
+      "relationships": [
+        {"objectId": "C1", "qualifier": "placed by"},
+        {"objectId": "D1", "qualifier": "contains"},
+        {"objectId": "B1", "qualifier": "assigned to"}
+      ]
+    },
+    {
+      "id": "O2", "type": "Order",
+      "relationships": [
+        {"objectId": "C2", "qualifier": "placed by"},
+        {"objectId": "D2", "qualifier": "contains"},
+        {"objectId": "B1", "qualifier": "assigned to"}
+      ]
+    },
+    {
+      "id": "O3", "type": "Order",
+      "relationships": [
+        {"objectId": "C3", "qualifier": "placed by"},
+        {"objectId": "D3", "qualifier": "contains"},
+        {"objectId": "D4", "qualifier": "contains"},
+        {"objectId": "B2", "qualifier": "assigned to"}
+      ]
+    },
+    {
+      "id": "D1", "type": "Drink",
+      "relationships": [
+        {"objectId": "O1", "qualifier": "belongs to"}
+      ]
+    },
+    {
+      "id": "D2", "type": "Drink",
+      "relationships": [
+        {"objectId": "O2", "qualifier": "belongs to"}
+      ]
+    },
+    {
+      "id": "D3", "type": "Drink",
+      "relationships": [
+        {"objectId": "O3", "qualifier": "belongs to"}
+      ]
+    },
+    {
+      "id": "D4", "type": "Drink",
+      "relationships": [
+        {"objectId": "O3", "qualifier": "belongs to"}
+      ]
+    },
+    {
+      "id": "B1", "type": "Barista",
+      "relationships": [
+        {"objectId": "O1", "qualifier": "prepares"},
+        {"objectId": "O2", "qualifier": "prepares"}
+      ]
+    },
+    {
+      "id": "B2", "type": "Barista",
+      "relationships": [
+        {"objectId": "O3", "qualifier": "prepares"}
+      ]
+    }
+  ]
+}
