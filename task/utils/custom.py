@@ -11,6 +11,7 @@ from relbench.modeling.graph import (
     NodeTrainTableInput,
     to_unix_time,
 )
+from .transform import TargetTransform
 
 
 class MEntityTask(BaseTask):
@@ -22,6 +23,9 @@ class MEntityTask(BaseTask):
     target_col: str
     task_type: TaskType
     num_eval_timestamps: int = 1
+
+    def make_target_transform(self) -> TargetTransform | None:
+        return None
 
     def filter_dangling_entities(self, table: Table) -> Table:
         db = self.dataset.get_db()
@@ -152,10 +156,10 @@ class MEntityTask(BaseTask):
 
 def _get_target_tensor(task: "MEntityTask", df: pd.DataFrame) -> torch.Tensor:
     if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
-        return torch.from_numpy(df[task.target_col].to_numpy(dtype=int))
+        return torch.from_numpy(df[task.target_col].to_numpy(dtype=int, copy=True))
     if task.task_type == TaskType.MULTILABEL_CLASSIFICATION:
         return torch.from_numpy(np.stack(df[task.target_col].values)) # type: ignore
-    return torch.from_numpy(df[task.target_col].to_numpy(dtype=float))
+    return torch.from_numpy(df[task.target_col].to_numpy(dtype=float, copy=True))
 
 
 def add_task_to_database(
@@ -163,7 +167,7 @@ def add_task_to_database(
     task: "MEntityTask",
     task_name: str,
     col_to_stype_dict: dict,
-) -> tuple[Any, dict[str, NodeTrainTableInput]]:
+) -> tuple[Any, dict[str, NodeTrainTableInput], TargetTransform | None]:
     """Add one MEntityTask table to the database and return split loader inputs."""
     labels_table_name = f"{task_name}_labels"
     split_frames: dict[str, pd.DataFrame] = {}
@@ -192,6 +196,9 @@ def add_task_to_database(
 
     # Task labels must not be part of the node features.
     col_to_stype_dict[labels_table_name] = {}
+    target_transform = task.make_target_transform()
+    if target_transform is not None:
+        target_transform.fit(_get_target_tensor(task, split_frames["train"]))
     split_inputs: dict[str, NodeTrainTableInput] = {}
     start = 0
     for split in ["train", "val", "test"]:
@@ -199,6 +206,8 @@ def add_task_to_database(
         stop = start + len(split_df)
         node_ids = torch.arange(start, stop, dtype=torch.long)
         target = _get_target_tensor(task, split_df)
+        if target_transform is not None:
+            target = target_transform.transform(target)
         split_inputs[split] = NodeTrainTableInput(
             nodes=(labels_table_name, node_ids),
             time=torch.from_numpy(to_unix_time(split_df[task.time_col])),
@@ -207,4 +216,4 @@ def add_task_to_database(
         )
         start = stop
 
-    return db, split_inputs
+    return db, split_inputs, target_transform

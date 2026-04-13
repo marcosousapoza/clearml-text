@@ -12,6 +12,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from scripts.model import Model
 from task.utils import MEntityTask
+from task.utils.transform import TargetTransform
 
 
 class EntityGNNLightningModule(LightningModule):
@@ -23,6 +24,7 @@ class EntityGNNLightningModule(LightningModule):
         col_stats_dict: dict,
         split_inputs: dict[str, Any],
         task_node_type: str,
+        target_transform: TargetTransform | None,
         num_layers: int,
         channels: int,
         aggr: str,
@@ -31,11 +33,12 @@ class EntityGNNLightningModule(LightningModule):
     ) -> None:
         super().__init__()
         self.save_hyperparameters(
-            ignore=["task", "data", "col_stats_dict", "split_inputs"],
+            ignore=["task", "data", "col_stats_dict", "split_inputs", "target_transform"],
         )
 
         self.task = task
         self.task_node_type = task_node_type
+        self.target_transform = target_transform
         self.lr = lr
         self.epochs = epochs
 
@@ -126,6 +129,8 @@ class EntityGNNLightningModule(LightningModule):
         if self.task.task_type == TaskType.REGRESSION:
             assert self.clamp_min is not None
             assert self.clamp_max is not None
+            if self.target_transform is not None:
+                pred = self.target_transform.inverse_transform(pred)
             pred = torch.clamp(pred, self.clamp_min, self.clamp_max)
 
         if self.task.task_type in (
@@ -148,7 +153,7 @@ class EntityGNNLightningModule(LightningModule):
             return
 
         pred = torch.cat(pred_list, dim=0).numpy()
-        if self.trainer.fast_dev_run and target_table is not None:
+        if getattr(self.trainer, "fast_dev_run", False):
             return
 
         metrics = self.task.evaluate(pred, target_table) if target_table is not None else self.task.evaluate(pred)

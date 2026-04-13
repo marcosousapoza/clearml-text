@@ -20,9 +20,10 @@ from data.cache import configure_cache_environment
 from data.dataset import register_all_datasets
 from scripts.lightning.data import RelbenchLightningDataModule
 from scripts.lightning.module import EntityGNNLightningModule
+from scripts.lightning.warnings import configure_training_warnings
 from task import register_tasks
 
-from .config import HpoConfig, storage_uri, study_root
+from .config import HpoConfig, optuna_storage, storage_display, study_root
 from .search_space import TrialParams, suggest_trial_params
 
 
@@ -62,6 +63,7 @@ class GracefulOptunaPruningCallback(Callback):
 
 
 def run_hpo(config: HpoConfig) -> None:
+    configure_training_warnings()
     cache_root = configure_cache_environment(config.cache_dir)
     study_dir = study_root(cache_root, config)
     study_dir.mkdir(parents=True, exist_ok=True)
@@ -70,23 +72,33 @@ def run_hpo(config: HpoConfig) -> None:
     register_tasks()
     task = get_task(config.dataset, config.task, download=False)
     direction = "minimize" if task.task_type == TaskType.REGRESSION else "maximize"
+    storage = optuna_storage(study_dir, config.storage_backend)
     pruner = optuna.pruners.MedianPruner(
         n_startup_trials=config.pruner_startup_trials,
         n_warmup_steps=config.pruner_warmup_steps,
     )
     study = optuna.create_study(
         study_name=config.study_name,
-        storage=storage_uri(study_dir),
+        storage=storage,
         direction=direction,
         pruner=pruner,
         load_if_exists=True,
     )
 
-    print(f"[hpo] study={config.study_name!r} direction={direction} storage={storage_uri(study_dir)}")
+    print(
+        f"[hpo] study={config.study_name!r} direction={direction} "
+        f"storage_backend={config.storage_backend} storage={storage_display(study_dir, config.storage_backend)}"
+    )
     print(f"[hpo] outputs={study_dir}")
 
-    objective = _Objective(config=config, study_dir=study_dir, direction=direction)
+    objective = _Objective(
+        config=config,
+        study_dir=study_dir,
+        direction=direction,
+        keep_all_checkpoints=config.storage_backend == "journal",
+    )
     study.optimize(objective, n_trials=config.n_trials, timeout=config.timeout, n_jobs=1)
+    _sync_best_trial_attrs(study)
 
     try:
         best_trial = study.best_trial
@@ -101,10 +113,18 @@ def run_hpo(config: HpoConfig) -> None:
 
 
 class _Objective:
-    def __init__(self, *, config: HpoConfig, study_dir: Path, direction: str) -> None:
+    def __init__(
+        self,
+        *,
+        config: HpoConfig,
+        study_dir: Path,
+        direction: str,
+        keep_all_checkpoints: bool,
+    ) -> None:
         self.config = config
         self.study_dir = study_dir
         self.direction = direction
+        self.keep_all_checkpoints = keep_all_checkpoints
 
     def __call__(self, trial: optuna.Trial) -> float:
         params = suggest_trial_params(trial, self.config.fixed_params)
@@ -136,6 +156,7 @@ class _Objective:
             col_stats_dict=datamodule.artifacts.col_stats_dict,
             split_inputs=datamodule.artifacts.split_inputs,
             task_node_type=datamodule.artifacts.task_node_type,
+            target_transform=datamodule.artifacts.target_transform,
             num_layers=params.num_layers,
             channels=params.channels,
             aggr=params.aggr,
@@ -163,6 +184,8 @@ class _Objective:
             default_root_dir=str(trial_dir),
             logger=logger,
             callbacks=[checkpoint_callback, pruning_callback],
+            inference_mode=False,
+            log_every_n_steps=1,
         )
 
         status = "complete"
@@ -196,15 +219,19 @@ class _Objective:
             _set_trial_attrs(trial, params, trial_dir, metrics)
             raise optuna.TrialPruned(f"Trial was pruned at epoch {pruning_callback.pruned_epoch}.")
 
-        checkpoint_retained = self._retain_completed_best_checkpoint(
-            trial,
-            val_score,
-            best_path,
-            checkpoint_dir,
-            trial_dir,
-        )
-        metrics["checkpoint_retained"] = checkpoint_retained
-        metrics["retained_checkpoint_path"] = best_path if checkpoint_retained and best_path else None
+        if self.keep_all_checkpoints:
+            metrics["checkpoint_retained"] = bool(best_path)
+            metrics["retained_checkpoint_path"] = best_path or None
+        else:
+            checkpoint_retained = self._retain_completed_best_checkpoint(
+                trial,
+                val_score,
+                best_path,
+                checkpoint_dir,
+                trial_dir,
+            )
+            metrics["checkpoint_retained"] = checkpoint_retained
+            metrics["retained_checkpoint_path"] = best_path if checkpoint_retained and best_path else None
         _write_json(trial_dir / "metrics.json", metrics)
         _set_trial_attrs(trial, params, trial_dir, metrics)
         return val_score
@@ -259,6 +286,25 @@ def _set_trial_attrs(trial: optuna.Trial, params: TrialParams, trial_dir: Path, 
     trial.set_user_attr("params", params.to_dict())
     for name, value in metrics.items():
         trial.set_user_attr(name, value)
+
+
+def _sync_best_trial_attrs(study: optuna.Study) -> None:
+    try:
+        best_trial = study.best_trial
+    except ValueError:
+        return
+
+    best_path = best_trial.user_attrs.get("retained_checkpoint_path") or best_trial.user_attrs.get(
+        "evaluated_checkpoint_path"
+    )
+    study.set_user_attr("best_trial_number", best_trial.number)
+    study.set_user_attr("best_validation_score", best_trial.value)
+    study.set_user_attr("best_checkpoint_path", best_path)
+    if best_path:
+        study.set_user_attr("best_checkpoint_dir", str(Path(best_path).parent))
+    trial_dir = best_trial.user_attrs.get("trial_dir")
+    if trial_dir:
+        study.set_user_attr("best_trial_dir", trial_dir)
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:

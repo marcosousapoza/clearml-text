@@ -2,6 +2,7 @@ import argparse
 import os
 
 from .config import build_config
+from scripts.lightning.warnings import configure_training_warnings
 
 
 def _positive_int(value: str) -> int:
@@ -41,9 +42,10 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--task", required=True)
     parser.add_argument("--study-name", default=None, help="Defaults to '<dataset>:<task>'.")
+    parser.add_argument("--storage-backend", choices=("journal", "sqlite"), default="journal")
     parser.add_argument("--cache-dir", default=None)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--accelerator", type=str, default="auto")
+    parser.add_argument("--accelerator", type=str, default="gpu")
     parser.add_argument("--devices", type=str, default="auto")
     parser.add_argument("--precision", type=str, default="32-true")
     parser.add_argument("--num-workers", type=int, default=0)
@@ -66,6 +68,7 @@ def _add_fixed_param_args(parser: argparse.ArgumentParser) -> None:
 
 
 def main() -> None:
+    configure_training_warnings()
     args = parse_args()
     config = build_config(args)
 

@@ -10,6 +10,7 @@ from torch_geometric.seed import seed_everything
 
 from .data import RelbenchLightningDataModule
 from .module import EntityGNNLightningModule
+from .warnings import configure_training_warnings
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
+    configure_training_warnings()
     args = build_parser().parse_args(argv)
 
     if torch.cuda.is_available():
@@ -69,6 +71,7 @@ def main(argv: list[str] | None = None) -> None:
         col_stats_dict=datamodule.artifacts.col_stats_dict,
         split_inputs=datamodule.artifacts.split_inputs,
         task_node_type=datamodule.artifacts.task_node_type,
+        target_transform=datamodule.artifacts.target_transform,
         num_layers=args.num_layers,
         channels=args.channels,
         aggr=args.aggr,
@@ -92,7 +95,7 @@ def main(argv: list[str] | None = None) -> None:
 
     trainer = Trainer(
         accelerator=args.accelerator,
-        devices=_parse_devices(args.devices),
+        devices='auto',
         precision=args.precision,
         max_epochs=args.epochs,
         limit_train_batches=args.max_steps_per_epoch,
@@ -101,6 +104,8 @@ def main(argv: list[str] | None = None) -> None:
         logger=logger,
         callbacks=[checkpoint_callback],
         fast_dev_run=args.fast_dev_run,
+        inference_mode=False,
+        log_every_n_steps=1,
     )
 
     if args.ckpt_path is not None:
@@ -115,10 +120,3 @@ def main(argv: list[str] | None = None) -> None:
     if not args.fast_dev_run:
         trainer.test(module, datamodule=datamodule, ckpt_path="best" if best_path else None)
 
-
-def _parse_devices(value: str) -> str | int | list[int]:
-    if value == "auto":
-        return value
-    if "," in value:
-        return [int(item) for item in value.split(",") if item]
-    return int(value)

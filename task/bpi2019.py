@@ -6,6 +6,7 @@ from relbench.metrics import accuracy, f1, mae, mse, r2, rmse
 from data.const import OBJECT_ID_COL, OBJECT_TABLE, TIME_COL
 from data.wrapper import check_dbs
 from .utils.custom import MEntityTask
+from .utils.transform import Log1pZScoreTargetTransform
 from .utils import build_next_event_table, build_next_time_table, build_remaining_time_table
 
 
@@ -42,6 +43,9 @@ class POItemNextTime(MEntityTask):
     object_type = "POItem"
     metrics = [mae, mse, rmse, r2]
 
+    def make_target_transform(self) -> Log1pZScoreTargetTransform:
+        return Log1pZScoreTargetTransform()
+
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
@@ -62,6 +66,9 @@ class POItemRemainingTime(MEntityTask):
     target_col = "target"
     object_type = "POItem"
     metrics = [mae, mse, rmse, r2]
+
+    def make_target_transform(self) -> Log1pZScoreTargetTransform:
+        return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:

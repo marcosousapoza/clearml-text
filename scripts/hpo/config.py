@@ -9,6 +9,7 @@ class HpoConfig:
     dataset: str
     task: str
     study_name: str
+    storage_backend: str
     n_trials: int
     cache_dir: str | None
     seed: int
@@ -29,6 +30,7 @@ def build_config(args: Any) -> HpoConfig:
         dataset=args.dataset,
         task=args.task,
         study_name=args.study_name or f"{args.dataset}:{args.task}",
+        storage_backend=args.storage_backend,
         n_trials=args.n_trials,
         cache_dir=args.cache_dir,
         seed=args.seed,
@@ -50,6 +52,37 @@ def study_root(cache_root: Path, config: HpoConfig) -> Path:
 
 def storage_uri(study_dir: Path) -> str:
     return f"sqlite:///{(study_dir / 'optuna.sqlite3').resolve()}"
+
+
+def journal_path(study_dir: Path) -> Path:
+    return study_dir / "optuna.journal"
+
+
+def storage_artifact_path(study_dir: Path, backend: str) -> Path:
+    if backend == "sqlite":
+        return study_dir / "optuna.sqlite3"
+    if backend == "journal":
+        return journal_path(study_dir)
+    raise ValueError(f"unsupported storage backend: {backend}")
+
+
+def storage_display(study_dir: Path, backend: str) -> str:
+    if backend == "sqlite":
+        return storage_uri(study_dir)
+    if backend == "journal":
+        return str(journal_path(study_dir).resolve())
+    raise ValueError(f"unsupported storage backend: {backend}")
+
+
+def optuna_storage(study_dir: Path, backend: str):
+    if backend == "sqlite":
+        return storage_uri(study_dir)
+    if backend == "journal":
+        from optuna.storages import JournalStorage
+        from optuna.storages.journal import JournalFileBackend
+
+        return JournalStorage(JournalFileBackend(str(journal_path(study_dir).resolve())))
+    raise ValueError(f"unsupported storage backend: {backend}")
 
 
 def _fixed_params(args: Any) -> dict[str, Any]:
