@@ -18,18 +18,17 @@ from data.wrapper import check_dbs
 @check_dbs
 def build_event_within_table(
     db: Database,
-    object_types: tuple[str, str],
+    object_type: str,
     event_type: str,
     times: pd.Series,
     delta: pd.Timedelta,
-    lookback: pd.Timedelta,
 ) -> pd.DataFrame:
     event = db.table_dict[EVENT_TABLE].df
     obj = db.table_dict[OBJECT_TABLE].df
     e2o = db.table_dict[E2O_TABLE].df
     times_df = pd.DataFrame({"obs_time": pd.to_datetime(times).sort_values().unique()})
     future_window = f"{int(delta.total_seconds())} seconds"
-    lookback_window = f"{int(lookback.total_seconds())} seconds"
+
     con = duckdb.connect()
     con.register("event", event)
     con.register("obj", obj)
@@ -38,67 +37,63 @@ def build_event_within_table(
     try:
         return con.execute(
             f"""
-            WITH src_object AS (
-                SELECT {OBJECT_ID_COL} AS src, {TIME_COL} AS src_time
+            WITH typed_objects AS (
+                SELECT {OBJECT_ID_COL}
                 FROM obj
-                WHERE {OBJECT_TYPE_COL} = '{object_types[0]}'
+                WHERE {OBJECT_TYPE_COL} = '{object_type}'
             ),
-            dst_object AS (
-                SELECT {OBJECT_ID_COL} AS dst, {TIME_COL} AS dst_time
-                FROM obj
-                WHERE {OBJECT_TYPE_COL} = '{object_types[1]}'
+            object_events AS (
+                SELECT
+                    eo.{OBJECT_ID_COL},
+                    e.{EVENT_TYPE_COL},
+                    e.{TIME_COL}
+                FROM e2o eo
+                JOIN event e
+                  ON e.{EVENT_ID_COL} = eo.{EVENT_ID_COL}
+                JOIN typed_objects o
+                  ON o.{OBJECT_ID_COL} = eo.{OBJECT_ID_COL}
             ),
-            candidate_pairs AS (
+            first_seen AS (
+                SELECT
+                    {OBJECT_ID_COL},
+                    MIN({TIME_COL}) AS first_seen_time
+                FROM object_events
+                GROUP BY {OBJECT_ID_COL}
+            ),
+            first_target AS (
+                SELECT
+                    {OBJECT_ID_COL},
+                    MIN({TIME_COL}) AS first_target_time
+                FROM object_events
+                WHERE {EVENT_TYPE_COL} = '{event_type}'
+                GROUP BY {OBJECT_ID_COL}
+            ),
+            candidates AS (
                 SELECT
                     t.obs_time AS {TIME_COL},
-                    s.src,
-                    d.dst
+                    fs.{OBJECT_ID_COL},
+                    ft.first_target_time
                 FROM times_df t
-                JOIN src_object s
-                  ON s.src_time BETWEEN t.obs_time - INTERVAL '{lookback_window}' AND t.obs_time
-                JOIN dst_object d
-                  ON d.dst_time BETWEEN t.obs_time - INTERVAL '{lookback_window}' AND t.obs_time
-                WHERE s.src <> d.dst
-            ),
-            future_links AS (
-                SELECT
-                    e.{EVENT_ID_COL} AS event_id,
-                    e.{TIME_COL} AS event_time,
-                    le.{OBJECT_ID_COL} AS src,
-                    re.{OBJECT_ID_COL} AS dst
-                FROM event e
-                JOIN e2o le
-                  ON e.{EVENT_ID_COL} = le.{EVENT_ID_COL}
-                JOIN e2o re
-                  ON e.{EVENT_ID_COL} = re.{EVENT_ID_COL}
-                JOIN src_object s
-                  ON s.src = le.{OBJECT_ID_COL}
-                JOIN dst_object d
-                  ON d.dst = re.{OBJECT_ID_COL}
-                WHERE e.{EVENT_TYPE_COL} = '{event_type}'
-                  AND le.{OBJECT_ID_COL} <> re.{OBJECT_ID_COL}
-            ),
-            labeled AS (
-                SELECT
-                    c.src,
-                    c.dst,
-                    c.{TIME_COL},
-                    COUNT(f.event_id) > 0 AS target
-                FROM candidate_pairs c
-                LEFT JOIN future_links f
-                  ON f.src = c.src
-                 AND f.dst = c.dst
-                 AND f.event_time > c.{TIME_COL}
-                 AND f.event_time <= c.{TIME_COL} + INTERVAL '{future_window}'
-                GROUP BY c.src, c.dst, c.{TIME_COL}
+                JOIN first_seen fs
+                  ON fs.first_seen_time <= t.obs_time
+                LEFT JOIN first_target ft
+                  ON ft.{OBJECT_ID_COL} = fs.{OBJECT_ID_COL}
+                WHERE ft.first_target_time IS NULL
+                   OR ft.first_target_time > t.obs_time
             )
             SELECT
-                src,
-                dst,
+                {OBJECT_ID_COL},
                 {TIME_COL},
-                target
-            FROM labeled
-            ORDER BY {TIME_COL}, src, dst
+                CAST(
+                    COALESCE(
+                        first_target_time > {TIME_COL}
+                        AND first_target_time <= {TIME_COL} + INTERVAL '{future_window}',
+                        FALSE
+                    )
+                    AS INTEGER
+                ) AS target
+            FROM candidates
+            ORDER BY {TIME_COL}, {OBJECT_ID_COL}
             """
         ).df()
     finally:

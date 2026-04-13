@@ -5,7 +5,12 @@ from data.cache import configure_cache_environment
 from relbench.base import BaseTask
 from relbench.tasks import get_task, register_task
 
-from .bpi2017 import CaseRNextEvent, CaseRNextTime, CaseRRemainingTime
+from .bpi2017 import (
+    CaseRNextEvent,
+    CaseRNextTime,
+    CaseRRemainingTime,
+    OfferCancelledWithin30Days,
+)
 from .bpi2019 import POItemNextEvent, POItemNextTime, POItemRemainingTime
 from .container_logistics import ContainerNextEvent, ContainerNextTime, ContainerRemainingTime
 
@@ -14,6 +19,7 @@ TASK_SPECS = (
     ("bpi2017", "next_event_cases", CaseRNextEvent),
     ("bpi2017", "next_time_cases", CaseRNextTime),
     ("bpi2017", "remaining_time_cases", CaseRRemainingTime),
+    ("bpi2017", "event_within", OfferCancelledWithin30Days),
     ("bpi2019", "next_event_po_items", POItemNextEvent),
     ("bpi2019", "next_time_po_items", POItemNextTime),
     ("bpi2019", "remaining_time_po_items", POItemRemainingTime),
