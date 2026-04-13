@@ -59,7 +59,9 @@ class EntityGNNLightningModule(LightningModule):
         )
 
         self._val_preds: list[Tensor] = []
+        self._val_targets: list[Tensor] = []
         self._test_preds: list[Tensor] = []
+        self._test_targets: list[Tensor] = []
 
     @property
     def checkpoint_monitor(self) -> str:
@@ -80,35 +82,44 @@ class EntityGNNLightningModule(LightningModule):
         else:
             loss = self.loss_fn(pred.float(), target.float())
 
-        self.log(
-            "train/loss",
-            loss,
-            prog_bar=True,
-            on_step=False,
-            on_epoch=True,
-            batch_size=target.size(0),
-        )
+        self.log("train/loss", loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=target.size(0))
         return loss
 
     def validation_step(self, batch: Any, batch_idx: int) -> None:
-        pred = self._postprocess_for_eval(self._reshape_prediction(self(batch)))
-        self._val_preds.append(pred.detach().cpu())
+        raw_pred = self._reshape_prediction(self(batch))
+        target = batch[self.task_node_type].y
+        if self.task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
+            loss = self.loss_fn(raw_pred, target.long())
+        else:
+            loss = self.loss_fn(raw_pred.float(), target.float())
+        self.log("val/loss", loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=target.size(0))
+        self._val_preds.append(self._postprocess_for_eval(raw_pred).detach().cpu())
+        self._val_targets.append(target.detach().cpu())
 
     def on_validation_epoch_start(self) -> None:
         self._val_preds = []
+        self._val_targets = []
 
     def on_validation_epoch_end(self) -> None:
-        self._log_eval_metrics("val", self._val_preds, self.task.get_table("val"))
+        self._log_eval_metrics("val", self._val_preds, self.task.get_table("val", mask_input_cols=False))
 
     def test_step(self, batch: Any, batch_idx: int) -> None:
-        pred = self._postprocess_for_eval(self._reshape_prediction(self(batch)))
-        self._test_preds.append(pred.detach().cpu())
+        raw_pred = self._reshape_prediction(self(batch))
+        target = batch[self.task_node_type].y
+        if self.task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
+            loss = self.loss_fn(raw_pred, target.long())
+        else:
+            loss = self.loss_fn(raw_pred.float(), target.float())
+        self.log("test/loss", loss, on_step=False, on_epoch=True, batch_size=target.size(0))
+        self._test_preds.append(self._postprocess_for_eval(raw_pred).detach().cpu())
+        self._test_targets.append(target.detach().cpu())
 
     def on_test_epoch_start(self) -> None:
         self._test_preds = []
+        self._test_targets = []
 
     def on_test_epoch_end(self) -> None:
-        self._log_eval_metrics("test", self._test_preds, None)
+        self._log_eval_metrics("test", self._test_preds, self.task.get_table("test", mask_input_cols=False))
 
     def configure_optimizers(self) -> OptimizerLRScheduler:
         optimizer = Adam(self.parameters(), lr=self.lr)
@@ -153,10 +164,7 @@ class EntityGNNLightningModule(LightningModule):
             return
 
         pred = torch.cat(pred_list, dim=0).numpy()
-        if getattr(self.trainer, "fast_dev_run", False):
-            return
-
-        metrics = self.task.evaluate(pred, target_table) if target_table is not None else self.task.evaluate(pred)
+        metrics = self.task.evaluate(pred, target_table)
         for name, value in metrics.items():
             self.log(
                 f"{split}/{name}",

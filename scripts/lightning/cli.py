@@ -4,8 +4,8 @@ from pathlib import Path
 import lightning as L
 import torch
 from lightning.pytorch import Trainer
-from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning.pytorch.loggers import CSVLogger
+from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
+from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from torch_geometric.seed import seed_everything
 
 from .data import RelbenchLightningDataModule
@@ -83,7 +83,14 @@ def main(argv: list[str] | None = None) -> None:
         datamodule.artifacts.cache_root / f"{args.dataset}_{args.task}" / "lightning"
     )
     checkpoint_dir = root_dir / "checkpoints"
-    logger = CSVLogger(save_dir=str(root_dir), name="logs")
+    csv_logger = CSVLogger(save_dir=str(root_dir), name="logs")
+    wandb_logger = WandbLogger(
+        project="ocel-ocp",
+        name=f"{args.dataset}_{args.task}",
+        config=vars(args),
+        save_dir=str(root_dir),
+    )
+    loggers = [csv_logger, wandb_logger]
     checkpoint_callback = ModelCheckpoint(
         dirpath=str(checkpoint_dir),
         filename="epoch={epoch:02d}-{" + module.checkpoint_monitor.replace("/", "_") + ":.4f}",
@@ -101,8 +108,8 @@ def main(argv: list[str] | None = None) -> None:
         limit_train_batches=args.max_steps_per_epoch,
         num_sanity_val_steps=args.num_sanity_val_steps,
         default_root_dir=str(root_dir),
-        logger=logger,
-        callbacks=[checkpoint_callback],
+        logger=loggers,
+        callbacks=[checkpoint_callback, LearningRateMonitor(logging_interval="epoch")],
         fast_dev_run=args.fast_dev_run,
         inference_mode=False,
         log_every_n_steps=1,

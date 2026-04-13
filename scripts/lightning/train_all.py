@@ -24,17 +24,19 @@ class TrainingResult:
 
 
 def main(argv: list[str] | None = None) -> None:
+    import argparse
     import torch
 
     argv = sys.argv[1:] if argv is None else argv
-    if argv:
-        raise SystemExit("scripts.lightning.train_all does not accept arguments.")
+    parser = argparse.ArgumentParser(description="Train all registered tasks with PyTorch Lightning.")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed passed to each training subprocess.")
+    args = parser.parse_args(argv)
 
     gpu_count = torch.cuda.device_count()
     gpu_ids = _visible_gpu_ids(gpu_count)
     parallelism = len(gpu_ids) if gpu_ids else 1
     accelerator = "gpu" if gpu_ids else "cpu"
-    jobs = _build_jobs(accelerator)
+    jobs = _build_jobs(accelerator, args.seed)
 
     failures = _run_jobs(jobs, gpu_ids, parallelism)
     if failures:
@@ -44,14 +46,14 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(1)
 
 
-def _build_jobs(accelerator: str) -> list[TrainingJob]:
+def _build_jobs(accelerator: str, seed: int) -> list[TrainingJob]:
     jobs = []
     for dataset, task, _task_cls in TASK_SPECS:
         jobs.append(
             TrainingJob(
                 dataset=dataset,
                 task=task,
-                command=_build_command(dataset, task, accelerator),
+                command=_build_command(dataset, task, accelerator, seed),
             )
         )
     return jobs
@@ -94,6 +96,7 @@ def _build_command(
     dataset: str,
     task: str,
     accelerator: str,
+    seed: int,
 ) -> list[str]:
     command = [
         sys.executable,
@@ -105,6 +108,8 @@ def _build_command(
         task,
         "--accelerator",
         accelerator,
+        "--seed",
+        str(seed),
     ]
     if accelerator == "gpu":
         command.extend(["--devices", "1"])

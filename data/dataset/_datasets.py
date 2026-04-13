@@ -9,7 +9,7 @@ from torch_frame import stype
 
 from ._utils import unzip_file, parse_ocel_to_database
 from ..datareader.relbench_tables import apply_default_column_dtypes
-from ..const import E2O_TABLE, O2O_TABLE, OBJECT_ID_COL, OBJECT_TABLE, O2O_DST_COL, O2O_SRC_COL
+from ..const import E2O_TABLE, EVENT_TABLE, O2O_TABLE, OBJECT_ID_COL, OBJECT_TABLE, O2O_DST_COL, O2O_SRC_COL
 from ..wrapper import check_dbs
 
 

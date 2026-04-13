@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import scripts
 from data.cache import configure_cache_environment
 
 
@@ -85,6 +86,7 @@ def resolve_task_names(args: argparse.Namespace, registered_tasks: list[str]) ->
         )
     return args.task
 def main() -> None:
+    scripts.load_env()
     args = build_parser().parse_args()
     cache_root = configure_cache_environment(args.cache_root)
     dataset_dir = cache_root / args.dataset

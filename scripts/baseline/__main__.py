@@ -1,3 +1,5 @@
+import scripts; scripts.load_env()
+
 from .cli import main
 
 

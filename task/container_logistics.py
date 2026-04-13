@@ -24,7 +24,7 @@ class ContainerNextEvent(MEntityTask):
     target_col = "target"
     object_type = "Container"
     num_classes = 10
-    metrics = [accuracy, f1]
+    metrics = [accuracy, f1, roc_auc]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:

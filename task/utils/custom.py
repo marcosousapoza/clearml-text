@@ -11,6 +11,8 @@ from relbench.modeling.graph import (
     NodeTrainTableInput,
     to_unix_time,
 )
+
+from task.utils.metric import roc_auc
 from .transform import TargetTransform
 
 
@@ -67,6 +69,12 @@ class MEntityTask(BaseTask):
                     pred.argmax(axis=1),
                     average="macro",
                 ))
+                continue
+            if self.task_type == TaskType.MULTICLASS_CLASSIFICATION and metric_name == "roc_auc":
+                results["multiclass_roc_auc"] = roc_auc(
+                    target,
+                    pred,
+                )
                 continue
             results[metric_name] = fn(target, pred)
 

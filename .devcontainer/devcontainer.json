@@ -8,7 +8,7 @@
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/ocel-ocp,type=bind,consistency=cached",
   "workspaceFolder": "/workspace/ocel-ocp",
-  "postCreateCommand": "apt-get update && apt-get install -y git && git config --global --add safe.directory /workspace/ocel-ocp && pip install --upgrade pip setuptools wheel && pip install pytorch-frame torch-geometric pyg-lib torch-scatter torch-sparse torch-cluster -f https://data.pyg.org/whl/torch-2.9.1+cu128.html relbench optuna optuna-integration optuna-dashboard scikit-learn pandas scipy matplotlib seaborn plotly tqdm networkx transformers sentence-transformers lightning datasets xgboost lightgbm catboost ipython ipykernel duckdb pyarrow clearml unique-names-generator ijson pysimdjson sqlalchemy graphviz && pip freeze > requirements.txt",
+  "postCreateCommand": "apt-get update && apt-get install -y git && git config --global --add safe.directory /workspace/ocel-ocp && pip install --upgrade pip setuptools wheel && pip install pytorch-frame torch-geometric pyg-lib torch-scatter torch-sparse torch-cluster -f https://data.pyg.org/whl/torch-2.9.1+cu128.html relbench optuna optuna-integration optuna-dashboard scikit-learn pandas scipy matplotlib seaborn plotly tqdm networkx transformers sentence-transformers lightning datasets xgboost lightgbm catboost ipython ipykernel duckdb pyarrow clearml unique-names-generator ijson pysimdjson sqlalchemy graphviz wandb && pip freeze > requirements.txt",
   "customizations": {
     "vscode": {
       "extensions": [
