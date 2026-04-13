@@ -5,25 +5,25 @@ from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
 
 from data.const import OBJECT_ID_COL, OBJECT_TABLE, O2O_DST_COL, O2O_SRC_COL, TIME_COL
 from data.wrapper import check_dbs
-from .utils.custom import MEntityTask
 from .utils import (
+    MEntityTask,
+    build_complete_pair_event_within_table,
     build_next_event_table,
     build_next_time_table,
-    build_pair_event_within_table,
     build_remaining_time_table,
 )
 
 
-class ContainerNextEvent(MEntityTask):
-    timedelta = pd.Timedelta(hours=12)
+class OrderNextEvent(MEntityTask):
+    timedelta = pd.Timedelta(days=7)
     num_eval_timestamps = 40
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     entity_cols = (OBJECT_ID_COL,)
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "Container"
-    num_classes = 10
+    object_type = "orders"
+    num_classes = 4
     metrics = [accuracy, f1]
 
     @check_dbs
@@ -36,19 +36,19 @@ class ContainerNextEvent(MEntityTask):
         )
 
 
-class ContainerNextTime(MEntityTask):
-    timedelta = pd.Timedelta(hours=12)
+class OrderNextTime(MEntityTask):
+    timedelta = pd.Timedelta(days=7)
     num_eval_timestamps = 40
     task_type = TaskType.REGRESSION
     entity_cols = (OBJECT_ID_COL,)
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "Container"
+    object_type = "orders"
     metrics = [mae, mse, rmse, r2]
 
-    # def make_target_transform(self) -> ZScoreTargetTransform:
-    #     return ZScoreTargetTransform()
+    # def make_target_transform(self) -> Log1pZScoreTargetTransform:
+    #     return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
@@ -60,19 +60,19 @@ class ContainerNextTime(MEntityTask):
         )
 
 
-class ContainerRemainingTime(MEntityTask):
-    timedelta = pd.Timedelta(hours=12)
+class OrderRemainingTime(MEntityTask):
+    timedelta = pd.Timedelta(days=7)
     num_eval_timestamps = 40
     task_type = TaskType.REGRESSION
     entity_cols = (OBJECT_ID_COL,)
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "Container"
+    object_type = "orders"
     metrics = [mae, mse, rmse, r2]
 
-    # def make_target_transform(self) -> ZScoreTargetTransform:
-    #     return ZScoreTargetTransform()
+    # def make_target_transform(self) -> Log1pZScoreTargetTransform:
+    #     return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
@@ -84,8 +84,8 @@ class ContainerRemainingTime(MEntityTask):
         )
 
 
-class TransportDocumentVehicleDepartWithin7Days(MEntityTask):
-    timedelta = pd.Timedelta(days=7)
+class CustomerProductPlaceOrderWithin14Days(MEntityTask):
+    timedelta = pd.Timedelta(days=14)
     num_eval_timestamps = 40
     task_type = TaskType.BINARY_CLASSIFICATION
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)
@@ -97,10 +97,10 @@ class TransportDocumentVehicleDepartWithin7Days(MEntityTask):
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_pair_event_within_table(
+            df=build_complete_pair_event_within_table(
                 db=db,
-                object_types=("Transport Document", "Vehicle"),
-                event_type="Depart",
+                object_types=("customers", "products"),
+                event_type="place order",
                 times=timestamps,
                 delta=self.timedelta,
             ),

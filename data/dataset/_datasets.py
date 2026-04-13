@@ -274,7 +274,7 @@ class OrderManagementDataset(OCELDataset):
     """
 
     val_timestamp = pd.Timestamp("2023-09-27 09:22:38")
-    test_timestamp = pd.Timestamp("2023-12-29 22:34:20")
+    test_timestamp = pd.Timestamp("2023-12-01 00:00:00")
 
     _uri = "https://zenodo.org/records/8428112/files/order-management.json?download=1"
     _file_format = "json"

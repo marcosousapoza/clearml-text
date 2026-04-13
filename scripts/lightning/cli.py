@@ -24,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--aggr", type=str, default="sum")
     parser.add_argument("--num_layers", type=int, default=2)
     parser.add_argument("--num_neighbors", type=int, default=128)
-    parser.add_argument("--temporal_strategy", type=str, default="last")
+    parser.add_argument("--temporal_strategy", type=str, default="uniform")
     parser.add_argument("--max_steps_per_epoch", type=int, default=2000)
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
@@ -95,7 +95,7 @@ def main(argv: list[str] | None = None) -> None:
 
     trainer = Trainer(
         accelerator=args.accelerator,
-        devices='auto',
+        devices=args.devices,
         precision=args.precision,
         max_epochs=args.epochs,
         limit_train_batches=args.max_steps_per_epoch,
@@ -119,4 +119,3 @@ def main(argv: list[str] | None = None) -> None:
         print(f"Best checkpoint: {best_path}")
     if not args.fast_dev_run:
         trainer.test(module, datamodule=datamodule, ckpt_path="best" if best_path else None)
-

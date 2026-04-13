@@ -6,7 +6,6 @@ from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
 from data.const import OBJECT_ID_COL, OBJECT_TABLE, TIME_COL
 from data.wrapper import check_dbs
 from .utils.custom import MEntityTask
-from .utils.transform import Log1pZScoreTargetTransform, ZScoreTargetTransform
 from .utils import (
     build_next_event_table,
     build_next_time_table,
@@ -48,8 +47,8 @@ class CaseRNextTime(MEntityTask):
     object_type = "Case_R"
     metrics = [mae, mse, rmse, r2]
 
-    def make_target_transform(self) -> Log1pZScoreTargetTransform:
-        return Log1pZScoreTargetTransform()
+    # def make_target_transform(self) -> Log1pZScoreTargetTransform:
+    #     return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
@@ -72,8 +71,8 @@ class CaseRRemainingTime(MEntityTask):
     object_type = "Case_R"
     metrics = [mae, mse, rmse, r2]
 
-    def make_target_transform(self) -> ZScoreTargetTransform:
-        return ZScoreTargetTransform()
+    # def make_target_transform(self) -> ZScoreTargetTransform:
+    #     return ZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
