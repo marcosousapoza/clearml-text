@@ -34,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--precision", type=str, default="32-true")
     parser.add_argument("--default_root_dir", type=str, default=None)
     parser.add_argument("--num_sanity_val_steps", type=int, default=0)
+    parser.add_argument("--flatten", action="store_true", help="Flatten the database to the task object types.")
     parser.add_argument(
         "--ckpt_path",
         type=str,
@@ -61,6 +62,7 @@ def main(argv: list[str] | None = None) -> None:
         temporal_strategy=args.temporal_strategy,
         num_workers=args.num_workers,
         cache_dir=args.cache_dir,
+        flatten=args.flatten,
     )
     datamodule.setup("fit")
     assert datamodule.artifacts is not None
@@ -79,14 +81,15 @@ def main(argv: list[str] | None = None) -> None:
         epochs=args.epochs,
     )
 
+    run_name = f"{args.dataset}_{args.task}{'_flat' if args.flatten else ''}"
     root_dir = Path(args.default_root_dir) if args.default_root_dir else (
-        datamodule.artifacts.cache_root / f"{args.dataset}_{args.task}" / "lightning"
+        datamodule.artifacts.cache_root / run_name / "lightning"
     )
     checkpoint_dir = root_dir / "checkpoints"
     csv_logger = CSVLogger(save_dir=str(root_dir), name="logs")
     wandb_logger = WandbLogger(
         project="ocel-ocp",
-        name=f"{args.dataset}_{args.task}",
+        name=run_name,
         config=vars(args),
         save_dir=str(root_dir),
     )

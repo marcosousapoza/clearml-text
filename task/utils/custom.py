@@ -24,6 +24,7 @@ class MEntityTask(BaseTask):
     time_col: str
     target_col: str
     task_type: TaskType
+    object_types: tuple[str, ...]
     num_eval_timestamps: int = 1
 
     def make_target_transform(self) -> TargetTransform | None:

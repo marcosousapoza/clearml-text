@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from lightning.pytorch import LightningModule
 from lightning.pytorch.utilities.types import OptimizerLRScheduler
-from relbench.base import TaskType
+from relbench.base import Table, TaskType
 from torch import Tensor
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, L1Loss
 from torch.optim import Adam
@@ -44,7 +44,6 @@ class EntityGNNLightningModule(LightningModule):
 
         self.out_channels, self.loss_fn, self.tune_metric, self.higher_is_better = self._build_task_setup(
             task=task,
-            split_inputs=split_inputs,
         )
         self.clamp_min, self.clamp_max = self._get_regression_clamp(task)
 
@@ -101,7 +100,12 @@ class EntityGNNLightningModule(LightningModule):
         self._val_targets = []
 
     def on_validation_epoch_end(self) -> None:
-        self._log_eval_metrics("val", self._val_preds, self.task.get_table("val", mask_input_cols=False))
+        self._log_eval_metrics(
+            "val",
+            self._val_preds,
+            self._val_targets,
+            self.task.get_table("val", mask_input_cols=False),
+        )
 
     def test_step(self, batch: Any, batch_idx: int) -> None:
         raw_pred = self._reshape_prediction(self(batch))
@@ -119,7 +123,12 @@ class EntityGNNLightningModule(LightningModule):
         self._test_targets = []
 
     def on_test_epoch_end(self) -> None:
-        self._log_eval_metrics("test", self._test_preds, self.task.get_table("test", mask_input_cols=False))
+        self._log_eval_metrics(
+            "test",
+            self._test_preds,
+            self._test_targets,
+            self.task.get_table("test", mask_input_cols=False),
+        )
 
     def configure_optimizers(self) -> OptimizerLRScheduler:
         optimizer = Adam(self.parameters(), lr=self.lr)
@@ -154,16 +163,39 @@ class EntityGNNLightningModule(LightningModule):
 
         return pred
 
+    def _postprocess_target_for_eval(self, target: Tensor) -> Tensor:
+        if self.task.task_type == TaskType.REGRESSION and self.target_transform is not None:
+            target = self.target_transform.inverse_transform(target)
+        return target
+
     def _log_eval_metrics(
         self,
         split: str,
         pred_list: list[Tensor],
+        target_list: list[Tensor],
         target_table: Any,
     ) -> None:
-        if not pred_list:
+        if not pred_list or not target_list:
             return
 
         pred = torch.cat(pred_list, dim=0).numpy()
+        target = torch.cat(
+            [self._postprocess_target_for_eval(target) for target in target_list],
+            dim=0,
+        ).numpy()
+        if len(pred) != len(target):
+            raise ValueError(
+                f"The length of {split} predictions and targets must match "
+                f"(got {len(pred)} and {len(target)}, respectively)."
+            )
+        if len(pred) < len(target_table):
+            target_table = Table(
+                df=target_table.df.iloc[: len(pred)].copy(),
+                fkey_col_to_pkey_table=target_table.fkey_col_to_pkey_table,
+                pkey_col=target_table.pkey_col,
+                time_col=target_table.time_col,
+            )
+        target_table.df[self.task.target_col] = list(target) if target.ndim > 1 else target
         metrics = self.task.evaluate(pred, target_table)
         for name, value in metrics.items():
             self.log(
@@ -178,7 +210,6 @@ class EntityGNNLightningModule(LightningModule):
     @staticmethod
     def _build_task_setup(
         task: MEntityTask,
-        split_inputs: dict[str, Any],
     ) -> tuple[int, torch.nn.Module, str, bool]:
         if task.task_type == TaskType.BINARY_CLASSIFICATION:
             return 1, BCEWithLogitsLoss(), "roc_auc", True
@@ -191,11 +222,7 @@ class EntityGNNLightningModule(LightningModule):
 
         if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
             out_channels = task.num_classes  # type: ignore[attr-defined]
-            train_target = split_inputs["train"].target.long()
-            class_counts = torch.bincount(train_target, minlength=out_channels).float()
-            class_weights = class_counts.sum() / torch.clamp(class_counts, min=1.0)
-            class_weights = class_weights / class_weights.mean()
-            return out_channels, CrossEntropyLoss(weight=class_weights), "multiclass_f1", True
+            return out_channels, CrossEntropyLoss(), "multiclass_f1", True
 
         raise ValueError(f"Task type {task.task_type} is unsupported")
 

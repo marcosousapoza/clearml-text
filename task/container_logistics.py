@@ -22,14 +22,25 @@ class ContainerNextEvent(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "Container"
-    num_classes = 10
+    object_types = ("Container",)
+    event_types = (
+        "Bring to Loading Bay",
+        "Depart",
+        "Drive to Terminal",
+        "Load Truck",
+        "Load to Vehicle",
+        "Pick Up Empty Container",
+        "Place in Stock",
+        "Reschedule Container",
+        "Weigh",
+    )
+    num_classes = 9
     metrics = [accuracy, f1, roc_auc]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_next_event_table(db, self.object_type, timestamps),
+            df=build_next_event_table(db, self.object_types[0], timestamps, self.event_types),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -44,7 +55,7 @@ class ContainerNextTime(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "Container"
+    object_types = ("Container",)
     metrics = [mae, mse, rmse, r2]
 
     # def make_target_transform(self) -> ZScoreTargetTransform:
@@ -53,7 +64,7 @@ class ContainerNextTime(MEntityTask):
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_next_time_table(db, self.object_type, timestamps),
+            df=build_next_time_table(db, self.object_types[0], timestamps),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -68,7 +79,7 @@ class ContainerRemainingTime(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "Container"
+    object_types = ("Container",)
     metrics = [mae, mse, rmse, r2]
 
     # def make_target_transform(self) -> ZScoreTargetTransform:
@@ -77,7 +88,7 @@ class ContainerRemainingTime(MEntityTask):
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_remaining_time_table(db, self.object_type, timestamps),
+            df=build_remaining_time_table(db, self.object_types[0], timestamps),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -92,6 +103,7 @@ class TransportDocumentVehicleDepartWithin7Days(MEntityTask):
     entity_tables = (OBJECT_TABLE, OBJECT_TABLE)
     time_col = TIME_COL
     target_col = "target"
+    object_types = ("Transport Document", "Vehicle")
     metrics = [accuracy, f1, auprc, roc_auc]
 
     @check_dbs

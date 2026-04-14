@@ -22,14 +22,31 @@ class CaseRNextEvent(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "Case_R"
+    object_types = ("Case_R",)
+    event_types = [
+        "A_Accepted",
+        "A_Cancelled",
+        "A_Create Application",
+        "A_Denied",
+        "O_Accepted",
+        "O_Cancelled",
+        "O_Create Offer",
+        "O_Returned",
+        "O_Sent (mail and online)",
+        "W_Assess potential fraud",
+        "W_Call after offers",
+        "W_Call incomplete files",
+        "W_Complete application",
+        "W_Handle leads",
+        "W_Validate application",
+    ]
     num_classes = 15
     metrics = [accuracy, f1]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_next_event_table(db, self.object_type, timestamps),
+            df=build_next_event_table(db, self.object_types[0], timestamps, self.event_types),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -44,7 +61,7 @@ class CaseRNextTime(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "Case_R"
+    object_types = ("Case_R",)
     metrics = [mae, mse, rmse, r2]
 
     # def make_target_transform(self) -> Log1pZScoreTargetTransform:
@@ -53,7 +70,7 @@ class CaseRNextTime(MEntityTask):
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_next_time_table(db, self.object_type, timestamps),
+            df=build_next_time_table(db, self.object_types[0], timestamps),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -68,7 +85,7 @@ class CaseRRemainingTime(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "Case_R"
+    object_types = ("Case_R",)
     metrics = [mae, mse, rmse, r2]
 
     # def make_target_transform(self) -> ZScoreTargetTransform:
@@ -77,7 +94,7 @@ class CaseRRemainingTime(MEntityTask):
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_remaining_time_table(db, self.object_type, timestamps),
+            df=build_remaining_time_table(db, self.object_types[0], timestamps),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -92,6 +109,7 @@ class OfferCancelledWithin30Days(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
+    object_types = ("Offer",)
     metrics = [accuracy, f1, auprc, roc_auc]
 
     @check_dbs

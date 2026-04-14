@@ -22,14 +22,50 @@ class POItemNextEvent(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "POItem"
-    num_classes = 30
+    object_types = ("POItem",)
+    event_types = [
+        "Block Purchase Order Item",
+        "Cancel Goods Receipt",
+        "Cancel Invoice Receipt",
+        "Cancel Subsequent Invoice",
+        "Change Approval for Purchase Order",
+        "Change Delivery Indicator",
+        "Change Price",
+        "Change Quantity",
+        "Change Storage Location",
+        "Change payment term",
+        "Clear Invoice",
+        "Create Purchase Order Item",
+        "Create Purchase Requisition Item",
+        "Delete Purchase Order Item",
+        "Reactivate Purchase Order Item",
+        "Receive Order Confirmation",
+        "Record Goods Receipt",
+        "Record Invoice Receipt",
+        "Record Service Entry Sheet",
+        "Record Subsequent Invoice",
+        "Release Purchase Order",
+        "Release Purchase Requisition",
+        "Remove Payment Block",
+        "SRM: Created",
+        "SRM: Deleted",
+        "SRM: Document Completed",
+        "SRM: In Transfer to Execution Syst.",
+        "SRM: Ordered",
+        "SRM: Transaction Completed",
+        "SRM: Transfer Failed (E.Sys.)",
+        "Set Payment Block",
+        "Update Order Confirmation",
+        "Vendor creates debit memo",
+        "Vendor creates invoice",
+    ]
+    num_classes = 34
     metrics = [accuracy, f1]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_next_event_table(db, self.object_type, timestamps),
+            df=build_next_event_table(db, self.object_types[0], timestamps, self.event_types),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -44,7 +80,7 @@ class POItemNextTime(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "POItem"
+    object_types = ("POItem",)
     metrics = [mae, mse, rmse, r2]
 
     # def make_target_transform(self) -> Log1pZScoreTargetTransform:
@@ -53,7 +89,7 @@ class POItemNextTime(MEntityTask):
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_next_time_table(db, self.object_type, timestamps),
+            df=build_next_time_table(db, self.object_types[0], timestamps),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -68,7 +104,7 @@ class POItemRemainingTime(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "POItem"
+    object_types = ("POItem",)
     metrics = [mae, mse, rmse, r2]
 
     # def make_target_transform(self) -> Log1pZScoreTargetTransform:
@@ -77,7 +113,7 @@ class POItemRemainingTime(MEntityTask):
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_remaining_time_table(db, self.object_type, timestamps),
+            df=build_remaining_time_table(db, self.object_types[0], timestamps),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -92,6 +128,7 @@ class POItemVendorClearInvoiceWithin30Days(MEntityTask):
     entity_tables = (OBJECT_TABLE, OBJECT_TABLE)
     time_col = TIME_COL
     target_col = "target"
+    object_types = ("POItem", "Vendor")
     metrics = [accuracy, f1, auprc, roc_auc]
 
     @check_dbs

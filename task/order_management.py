@@ -22,14 +22,19 @@ class OrderNextEvent(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "orders"
-    num_classes = 4
+    object_types = ("orders",)
+    event_types = (
+        "confirm order",
+        "pay order",
+        "payment reminder",
+    )
+    num_classes = 3
     metrics = [accuracy, f1]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_next_event_table(db, self.object_type, timestamps),
+            df=build_next_event_table(db, self.object_types[0], timestamps, self.event_types),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -44,7 +49,7 @@ class OrderNextTime(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "orders"
+    object_types = ("orders",)
     metrics = [mae, mse, rmse, r2]
 
     # def make_target_transform(self) -> Log1pZScoreTargetTransform:
@@ -53,7 +58,7 @@ class OrderNextTime(MEntityTask):
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_next_time_table(db, self.object_type, timestamps),
+            df=build_next_time_table(db, self.object_types[0], timestamps),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -68,7 +73,7 @@ class OrderRemainingTime(MEntityTask):
     entity_tables = (OBJECT_TABLE,)
     time_col = TIME_COL
     target_col = "target"
-    object_type = "orders"
+    object_types = ("orders",)
     metrics = [mae, mse, rmse, r2]
 
     # def make_target_transform(self) -> Log1pZScoreTargetTransform:
@@ -77,7 +82,7 @@ class OrderRemainingTime(MEntityTask):
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return Table(
-            df=build_remaining_time_table(db, self.object_type, timestamps),
+            df=build_remaining_time_table(db, self.object_types[0], timestamps),
             fkey_col_to_pkey_table={self.entity_cols[0]: self.entity_tables[0]},
             pkey_col=None,
             time_col=self.time_col,
@@ -92,6 +97,7 @@ class CustomerProductPlaceOrderWithin14Days(MEntityTask):
     entity_tables = (OBJECT_TABLE, OBJECT_TABLE)
     time_col = TIME_COL
     target_col = "target"
+    object_types = ("customers", "products")
     metrics = [accuracy, f1, auprc, roc_auc]
 
     @check_dbs
