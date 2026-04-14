@@ -42,13 +42,17 @@ def main(argv: list[str] | None = None) -> None:
         help="Dataset name to train. Repeat to select multiple datasets. Defaults to all datasets.",
     )
     parser.add_argument("--flatten", action="store_true", help="Flatten databases to each task's object types.")
+    parser.add_argument("--accelerator", type=str, default=None, help="Accelerator override (e.g. cpu, gpu). Defaults to gpu if available, else cpu.")
+    parser.add_argument("--epochs", type=int, default=None, help="Number of training epochs. Defaults to the scripts.lightning default.")
     args = parser.parse_args(argv)
 
     gpu_count = torch.cuda.device_count()
     gpu_ids = _visible_gpu_ids(gpu_count)
     parallelism = len(gpu_ids) if gpu_ids else 1
-    accelerator = "gpu" if gpu_ids else "cpu"
-    jobs = _build_jobs(accelerator, set(args.dataset), args.flatten)
+    accelerator = args.accelerator or ("gpu" if gpu_ids else "cpu")
+    if accelerator == "cpu":
+        gpu_ids = []
+    jobs = _build_jobs(accelerator, set(args.dataset), args.flatten, args.epochs)
 
     failures = _run_jobs(jobs, gpu_ids, parallelism)
     if failures:
@@ -58,7 +62,7 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(1)
 
 
-def _build_jobs(accelerator: str, datasets: set[str], flatten: bool) -> list[TrainingJob]:
+def _build_jobs(accelerator: str, datasets: set[str], flatten: bool, epochs: int | None = None) -> list[TrainingJob]:
     jobs = []
     available_datasets = {dataset for dataset, _task, _task_cls in TASK_SPECS}
     unknown_datasets = datasets - available_datasets
@@ -78,7 +82,7 @@ def _build_jobs(accelerator: str, datasets: set[str], flatten: bool) -> list[Tra
                     dataset=dataset,
                     task=task,
                     seed=seed,
-                    command=_build_command(dataset, task, accelerator, seed, flatten),
+                    command=_build_command(dataset, task, accelerator, seed, flatten, epochs),
                 )
             )
     return jobs
@@ -123,6 +127,7 @@ def _build_command(
     accelerator: str,
     seed: int,
     flatten: bool,
+    epochs: int | None = None,
 ) -> list[str]:
     run_name = f"{dataset}_{task}{'_flat' if flatten else ''}"
     root_dir = get_cache_root() / run_name / "lightning" / f"seed_{seed}"
@@ -141,6 +146,8 @@ def _build_command(
         "--default_root_dir",
         str(root_dir),
     ]
+    if epochs is not None:
+        command.extend(["--epochs", str(epochs)])
     if flatten:
         command.append("--flatten")
     if accelerator == "gpu":
