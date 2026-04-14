@@ -20,6 +20,18 @@ class TaskSetup:
     clamp_max: float | None
 
 
+def _class_weights(task: MEntityTask) -> torch.Tensor:
+    """Inverse-frequency class weights for CrossEntropyLoss, computed from the training table."""
+    train_table = task.get_table("train")
+    targets = train_table.df[task.target_col].to_numpy()
+    num_classes = task.num_classes  # type: ignore[attr-defined]
+    counts = np.bincount(targets.astype(int), minlength=num_classes).astype(float)
+    counts = np.where(counts == 0, 1.0, counts)  # avoid division by zero for unseen classes
+    weights = 1.0 / counts
+    weights /= weights.sum()
+    return torch.tensor(weights, dtype=torch.float32)
+
+
 def build_task_setup(task: MEntityTask) -> TaskSetup:
     """Derive all task-type-specific training configuration from a task object."""
     clamp_min, clamp_max = None, None
@@ -41,7 +53,8 @@ def build_task_setup(task: MEntityTask) -> TaskSetup:
 
     elif task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
         out_channels = task.num_classes  # type: ignore[attr-defined]
-        loss_fn, tune_metric, higher_is_better = CrossEntropyLoss(), "multiclass_f1", True
+        loss_fn = CrossEntropyLoss(weight=_class_weights(task))
+        tune_metric, higher_is_better = "multiclass_f1", True
 
     else:
         raise ValueError(f"Task type {task.task_type} is unsupported")

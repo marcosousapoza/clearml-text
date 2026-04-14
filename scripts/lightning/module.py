@@ -82,6 +82,15 @@ class EntityGNNLightningModule(LightningModule):
         self.val_metric = RelbenchEvalMetric(task, "val", task_setup, target_transform)
         self.test_metric = RelbenchEvalMetric(task, "test", task_setup, target_transform)
 
+        # Register loss weight as a buffer so Lightning moves it to the correct device automatically
+        loss_weight = getattr(task_setup.loss_fn, "weight", None)
+        self.register_buffer("_loss_weight", loss_weight)  # None registers as None (no-op)
+
+    def on_fit_start(self) -> None:
+        # Sync loss weight to the device Lightning chose (buffer was moved by .to(device))
+        if self._loss_weight is not None:
+            self.task_setup.loss_fn.weight = self._loss_weight
+
     @property
     def checkpoint_monitor(self) -> str:
         return f"val/{self.task_setup.tune_metric}"

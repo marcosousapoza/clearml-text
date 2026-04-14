@@ -13,29 +13,24 @@ from .utils import (
 )
 
 
-class CaseRNextEvent(MEntityTask):
+class ApplicationNextEvent(MEntityTask):
     timedelta = pd.Timedelta(days=7)
     num_eval_timestamps = 40
     task_type = TaskType.MULTICLASS_CLASSIFICATION
-    object_types = ("Case_R",)
+    object_types = ("Application",)
     event_types = [
         "A_Accepted",
         "A_Cancelled",
+        "A_Complete",
+        "A_Concept",
         "A_Create Application",
         "A_Denied",
-        "O_Accepted",
-        "O_Cancelled",
-        "O_Create Offer",
-        "O_Returned",
-        "O_Sent (mail and online)",
-        "W_Assess potential fraud",
-        "W_Call after offers",
-        "W_Call incomplete files",
-        "W_Complete application",
-        "W_Handle leads",
-        "W_Validate application",
+        "A_Incomplete",
+        "A_Pending",
+        "A_Submitted",
+        "A_Validating",
     ]
-    num_classes = 15
+    num_classes = 10
     metrics = [accuracy, f1]
 
     @check_dbs

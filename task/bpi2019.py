@@ -25,9 +25,12 @@ class POItemNextEvent(MEntityTask):
         "Cancel Invoice Receipt",
         "Cancel Subsequent Invoice",
         "Change Approval for Purchase Order",
+        "Change Currency",
         "Change Delivery Indicator",
+        "Change Final Invoice Indicator",
         "Change Price",
         "Change Quantity",
+        "Change Rejection Indicator",
         "Change Storage Location",
         "Change payment term",
         "Clear Invoice",
@@ -41,21 +44,24 @@ class POItemNextEvent(MEntityTask):
         "Record Service Entry Sheet",
         "Record Subsequent Invoice",
         "Release Purchase Order",
-        "Release Purchase Requisition",
         "Remove Payment Block",
+        "SRM: Awaiting Approval",
+        "SRM: Change was Transmitted",
+        "SRM: Complete",
         "SRM: Created",
         "SRM: Deleted",
         "SRM: Document Completed",
+        "SRM: Held",
         "SRM: In Transfer to Execution Syst.",
+        "SRM: Incomplete",
         "SRM: Ordered",
         "SRM: Transaction Completed",
-        "SRM: Transfer Failed (E.Sys.)",
         "Set Payment Block",
         "Update Order Confirmation",
         "Vendor creates debit memo",
         "Vendor creates invoice",
     ]
-    num_classes = 34
+    num_classes = 40
     metrics = [accuracy, f1]
 
     @check_dbs
