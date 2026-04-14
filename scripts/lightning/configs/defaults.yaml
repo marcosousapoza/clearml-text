@@ -1,0 +1,36 @@
+trainer:
+  precision: "32-true"
+  accelerator: auto
+  devices: auto
+  max_epochs: 10
+  limit_train_batches: 2000
+  num_sanity_val_steps: 0
+  inference_mode: false
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+      init_args:
+        logging_interval: epoch
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        filename: "best"
+        save_top_k: 1
+        save_last: true
+  logger:
+    - class_path: lightning.pytorch.loggers.CSVLogger
+      init_args:
+        name: logs
+
+model:
+  num_layers: 2
+  channels: 128
+  aggr: sum
+  lr: 0.005
+  epochs: 10
+
+data:
+  batch_size: 512
+  num_layers: 2
+  num_neighbors: 128
+  temporal_strategy: uniform
+  num_workers: 0

@@ -1,12 +1,9 @@
 from typing import Any
 
-import numpy as np
-import torch
 from lightning.pytorch import LightningModule
 from lightning.pytorch.utilities.types import OptimizerLRScheduler
-from relbench.base import Table, TaskType
+from relbench.base import TaskType
 from torch import Tensor
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, L1Loss
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
@@ -14,121 +11,142 @@ from scripts.model import Model
 from task.utils import MEntityTask
 from task.utils.transform import TargetTransform
 
+from .data import DataArtifacts
+from .metrics import RelbenchEvalMetric
+from .task_config import TaskSetup, build_task_setup
+
 
 class EntityGNNLightningModule(LightningModule):
     def __init__(
         self,
         *,
-        task: MEntityTask,
-        data: Any,
-        col_stats_dict: dict,
-        split_inputs: dict[str, Any],
-        task_node_type: str,
-        target_transform: TargetTransform | None,
         num_layers: int,
         channels: int,
         aggr: str,
         lr: float,
         epochs: int,
+        # Artifact args — provided directly (HPO / old CLI) or via configure_from_artifacts() (LightningCLI)
+        task: MEntityTask | None = None,
+        data: Any = None,
+        col_stats_dict: dict | None = None,
+        split_inputs: dict[str, Any] | None = None,
+        task_node_type: str | None = None,
+        target_transform: TargetTransform | None = None,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(
             ignore=["task", "data", "col_stats_dict", "split_inputs", "target_transform"],
         )
-
-        self.task = task
-        self.task_node_type = task_node_type
-        self.target_transform = target_transform
         self.lr = lr
         self.epochs = epochs
 
-        self.out_channels, self.loss_fn, self.tune_metric, self.higher_is_better = self._build_task_setup(
-            task=task,
+        if task is not None:
+            assert data is not None and col_stats_dict is not None and task_node_type is not None
+            self._init_from_artifacts(task, data, col_stats_dict, task_node_type, target_transform)
+
+    def configure_from_artifacts(self, artifacts: DataArtifacts) -> None:
+        """Deferred initialisation called by LightningCLI after datamodule.setup()."""
+        self._init_from_artifacts(
+            artifacts.task,
+            artifacts.data,
+            artifacts.col_stats_dict,
+            artifacts.task_node_type,
+            artifacts.target_transform,
         )
-        self.clamp_min, self.clamp_max = self._get_regression_clamp(task)
+
+    def _init_from_artifacts(
+        self,
+        task: MEntityTask,
+        data: Any,
+        col_stats_dict: dict,
+        task_node_type: str,
+        target_transform: TargetTransform | None,
+    ) -> None:
+        hparams = self.hparams
+        self.task = task
+        self.task_node_type = task_node_type
+
+        task_setup: TaskSetup = build_task_setup(task)
+        self.task_setup = task_setup
 
         self.model = Model(
             data=data,
             col_stats_dict=col_stats_dict,
-            num_layers=num_layers,
-            channels=channels,
-            out_channels=self.out_channels,
-            aggr=aggr,
+            num_layers=hparams["num_layers"],
+            channels=hparams["channels"],
+            out_channels=task_setup.out_channels,
+            aggr=hparams["aggr"],
             norm="batch_norm",
         )
 
-        self._val_preds: list[Tensor] = []
-        self._val_targets: list[Tensor] = []
-        self._test_preds: list[Tensor] = []
-        self._test_targets: list[Tensor] = []
+        self.val_metric = RelbenchEvalMetric(task, "val", task_setup, target_transform)
+        self.test_metric = RelbenchEvalMetric(task, "test", task_setup, target_transform)
 
     @property
     def checkpoint_monitor(self) -> str:
-        return f"val/{self.tune_metric}"
+        return f"val/{self.task_setup.tune_metric}"
 
     @property
     def checkpoint_mode(self) -> str:
-        return "max" if self.higher_is_better else "min"
+        return "max" if self.task_setup.higher_is_better else "min"
 
     def forward(self, batch: Any) -> Tensor:
         return self.model(batch, self.task_node_type)
 
     def training_step(self, batch: Any, batch_idx: int) -> Tensor:
-        pred = self._reshape_prediction(self(batch))
+        raw_pred = self(batch)
+        pred = raw_pred.view(-1) if raw_pred.dim() > 1 and raw_pred.size(1) == 1 else raw_pred
         target = batch[self.task_node_type].y
         if self.task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
-            loss = self.loss_fn(pred, target.long())
+            loss = self.task_setup.loss_fn(pred, target.long())
         else:
-            loss = self.loss_fn(pred.float(), target.float())
-
+            loss = self.task_setup.loss_fn(pred.float(), target.float())
         self.log("train/loss", loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=target.size(0))
         return loss
 
     def validation_step(self, batch: Any, batch_idx: int) -> None:
-        raw_pred = self._reshape_prediction(self(batch))
+        raw_pred = self(batch)
+        pred = raw_pred.view(-1) if raw_pred.dim() > 1 and raw_pred.size(1) == 1 else raw_pred
         target = batch[self.task_node_type].y
         if self.task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
-            loss = self.loss_fn(raw_pred, target.long())
+            loss = self.task_setup.loss_fn(pred, target.long())
         else:
-            loss = self.loss_fn(raw_pred.float(), target.float())
+            loss = self.task_setup.loss_fn(pred.float(), target.float())
         self.log("val/loss", loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=target.size(0))
-        self._val_preds.append(self._postprocess_for_eval(raw_pred).detach().cpu())
-        self._val_targets.append(target.detach().cpu())
-
-    def on_validation_epoch_start(self) -> None:
-        self._val_preds = []
-        self._val_targets = []
+        self.val_metric.update(pred, target)
 
     def on_validation_epoch_end(self) -> None:
-        self._log_eval_metrics(
-            "val",
-            self._val_preds,
-            self._val_targets,
-            self.task.get_table("val", mask_input_cols=False),
+        metrics = self.val_metric.compute()
+        tune = self.task_setup.tune_metric
+        if tune in metrics:
+            self.log(f"val/{tune}", float(metrics[tune]), prog_bar=True, on_step=False, on_epoch=True, logger=True)
+        self.log_dict(
+            {f"val/{k}": float(v) for k, v in metrics.items() if k != tune},
+            on_step=False, on_epoch=True, logger=True,
         )
+        self.val_metric.reset()
 
     def test_step(self, batch: Any, batch_idx: int) -> None:
-        raw_pred = self._reshape_prediction(self(batch))
+        raw_pred = self(batch)
+        pred = raw_pred.view(-1) if raw_pred.dim() > 1 and raw_pred.size(1) == 1 else raw_pred
         target = batch[self.task_node_type].y
         if self.task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
-            loss = self.loss_fn(raw_pred, target.long())
+            loss = self.task_setup.loss_fn(pred, target.long())
         else:
-            loss = self.loss_fn(raw_pred.float(), target.float())
+            loss = self.task_setup.loss_fn(pred.float(), target.float())
         self.log("test/loss", loss, on_step=False, on_epoch=True, batch_size=target.size(0))
-        self._test_preds.append(self._postprocess_for_eval(raw_pred).detach().cpu())
-        self._test_targets.append(target.detach().cpu())
-
-    def on_test_epoch_start(self) -> None:
-        self._test_preds = []
-        self._test_targets = []
+        self.test_metric.update(pred, target)
 
     def on_test_epoch_end(self) -> None:
-        self._log_eval_metrics(
-            "test",
-            self._test_preds,
-            self._test_targets,
-            self.task.get_table("test", mask_input_cols=False),
+        metrics = self.test_metric.compute()
+        tune = self.task_setup.tune_metric
+        if tune in metrics:
+            self.log(f"test/{tune}", float(metrics[tune]), on_step=False, on_epoch=True, logger=True)
+        self.log_dict(
+            {f"test/{k}": float(v) for k, v in metrics.items() if k != tune},
+            on_step=False, on_epoch=True, logger=True,
         )
+        self.test_metric.reset()
 
     def configure_optimizers(self) -> OptimizerLRScheduler:
         optimizer = Adam(self.parameters(), lr=self.lr)
@@ -141,99 +159,3 @@ class EntityGNNLightningModule(LightningModule):
                 "frequency": 1,
             },
         }
-
-    def _reshape_prediction(self, pred: Tensor) -> Tensor:
-        return pred.view(-1) if pred.dim() > 1 and pred.size(1) == 1 else pred
-
-    def _postprocess_for_eval(self, pred: Tensor) -> Tensor:
-        if self.task.task_type == TaskType.REGRESSION:
-            assert self.clamp_min is not None
-            assert self.clamp_max is not None
-            if self.target_transform is not None:
-                pred = self.target_transform.inverse_transform(pred)
-            pred = torch.clamp(pred, self.clamp_min, self.clamp_max)
-
-        if self.task.task_type in (
-            TaskType.BINARY_CLASSIFICATION,
-            TaskType.MULTILABEL_CLASSIFICATION,
-        ):
-            pred = torch.sigmoid(pred)
-        elif self.task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
-            pred = torch.softmax(pred, dim=1)
-
-        return pred
-
-    def _postprocess_target_for_eval(self, target: Tensor) -> Tensor:
-        if self.task.task_type == TaskType.REGRESSION and self.target_transform is not None:
-            target = self.target_transform.inverse_transform(target)
-        return target
-
-    def _log_eval_metrics(
-        self,
-        split: str,
-        pred_list: list[Tensor],
-        target_list: list[Tensor],
-        target_table: Any,
-    ) -> None:
-        if not pred_list or not target_list:
-            return
-
-        pred = torch.cat(pred_list, dim=0).numpy()
-        target = torch.cat(
-            [self._postprocess_target_for_eval(target) for target in target_list],
-            dim=0,
-        ).numpy()
-        if len(pred) != len(target):
-            raise ValueError(
-                f"The length of {split} predictions and targets must match "
-                f"(got {len(pred)} and {len(target)}, respectively)."
-            )
-        if len(pred) < len(target_table):
-            target_table = Table(
-                df=target_table.df.iloc[: len(pred)].copy(),
-                fkey_col_to_pkey_table=target_table.fkey_col_to_pkey_table,
-                pkey_col=target_table.pkey_col,
-                time_col=target_table.time_col,
-            )
-        target_table.df[self.task.target_col] = list(target) if target.ndim > 1 else target
-        metrics = self.task.evaluate(pred, target_table)
-        for name, value in metrics.items():
-            self.log(
-                f"{split}/{name}",
-                float(value),
-                prog_bar=(split == "val" and name == self.tune_metric),
-                on_step=False,
-                on_epoch=True,
-                logger=True,
-            )
-
-    @staticmethod
-    def _build_task_setup(
-        task: MEntityTask,
-    ) -> tuple[int, torch.nn.Module, str, bool]:
-        if task.task_type == TaskType.BINARY_CLASSIFICATION:
-            return 1, BCEWithLogitsLoss(), "roc_auc", True
-
-        if task.task_type == TaskType.REGRESSION:
-            return 1, L1Loss(), "mae", False
-
-        if task.task_type == TaskType.MULTILABEL_CLASSIFICATION:
-            return task.num_labels, BCEWithLogitsLoss(), "multilabel_auprc_macro", True  # type: ignore[attr-defined]
-
-        if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
-            out_channels = task.num_classes  # type: ignore[attr-defined]
-            return out_channels, CrossEntropyLoss(), "multiclass_f1", True
-
-        raise ValueError(f"Task type {task.task_type} is unsupported")
-
-    @staticmethod
-    def _get_regression_clamp(task: MEntityTask) -> tuple[float | None, float | None]:
-        if task.task_type != TaskType.REGRESSION:
-            return None, None
-
-        train_table = task.get_table("train")
-        clamp_min, clamp_max = np.percentile(
-            train_table.df[task.target_col].to_numpy(),
-            [2, 98],
-        )
-        return float(clamp_min), float(clamp_max)
