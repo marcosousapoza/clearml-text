@@ -3,11 +3,117 @@ from typing import Callable, Optional
 from urllib.parse import urlparse
 import zipfile
 
+import pandas as pd
 import requests
+from relbench.base.database import Database
+from relbench.base.table import Table
 
 from ..cache import RAW_OCEL_DIRNAME, get_cache_root
+from ..const import (
+    E2O_EVENT_ID_COL,
+    E2O_OBJECT_ID_COL,
+    E2O_TABLE,
+    EVENT_ATTR_TABLE_PREFIX,
+    EVENT_ID_COL,
+    EVENT_TABLE,
+    OBJECT_ATTR_TABLE_PREFIX,
+    OBJECT_ID_COL,
+    OBJECT_TABLE,
+    O2O_DST_COL,
+    O2O_SRC_COL,
+    O2O_TABLE,
+    TIME_COL,
+)
 from ..datareader.json._reader import JSONDataReader
 from ..datareader.base import BaseDataReader
+
+
+def from_event_time(db: Database, timestamp: pd.Timestamp) -> Database:
+    """
+    Return a database containing rows linked to events from timestamp onwards.
+
+    Unlike `Database.from_`, this only uses the `event` table timestamp to choose
+    the temporal window. Object rows are kept when they are referenced by a
+    surviving event-object link, regardless of the object's own timestamp.
+    """
+    return _filter_by_event_time(db, timestamp, op="from")
+
+
+def upto_event_time(db: Database, timestamp: pd.Timestamp) -> Database:
+    """
+    Return a database containing rows linked to events up to timestamp.
+
+    Unlike `Database.upto`, this only uses the `event` table timestamp to choose
+    the temporal window. Object rows are kept when they are referenced by a
+    surviving event-object link, regardless of the object's own timestamp.
+    """
+    return _filter_by_event_time(db, timestamp, op="upto")
+
+
+def _filter_by_event_time(
+    db: Database,
+    timestamp: pd.Timestamp,
+    op: str,
+) -> Database:
+    event_table = db.table_dict[EVENT_TABLE]
+    event_df = event_table.df
+
+    if op == "from":
+        event_mask = event_df[TIME_COL] >= timestamp
+    elif op == "upto":
+        event_mask = event_df[TIME_COL] <= timestamp
+    else:
+        raise ValueError(f"Unsupported event time filter operation: {op}")
+
+    kept_event_ids = set(event_df.loc[event_mask, EVENT_ID_COL].dropna())
+    kept_object_ids = _object_ids_linked_to_events(db, kept_event_ids)
+
+    out: dict[str, Table] = {}
+    for name, table in db.table_dict.items():
+        df = table.df
+        if name == EVENT_TABLE:
+            filtered_df = df.loc[event_mask]
+        elif name == E2O_TABLE:
+            filtered_df = df[df[E2O_EVENT_ID_COL].isin(kept_event_ids)]
+        elif name == O2O_TABLE:
+            filtered_df = df[
+                df[O2O_SRC_COL].isin(kept_object_ids)
+                & df[O2O_DST_COL].isin(kept_object_ids)
+            ]
+        elif name == OBJECT_TABLE:
+            filtered_df = df[df[OBJECT_ID_COL].isin(kept_object_ids)]
+        elif name.startswith(EVENT_ATTR_TABLE_PREFIX) and EVENT_ID_COL in df.columns:
+            filtered_df = df[df[EVENT_ID_COL].isin(kept_event_ids)]
+        elif name.startswith(OBJECT_ATTR_TABLE_PREFIX) and OBJECT_ID_COL in df.columns:
+            filtered_df = df[df[OBJECT_ID_COL].isin(kept_object_ids)]
+        else:
+            filtered_df = df
+
+        out[name] = Table(
+            df=filtered_df,
+            time_col=table.time_col,
+            pkey_col=table.pkey_col,
+            fkey_col_to_pkey_table=table.fkey_col_to_pkey_table,
+        )
+
+    return Database(table_dict=out)
+
+
+def _object_ids_linked_to_events(
+    db: Database,
+    event_ids: set[object],
+) -> set[object]:
+    e2o_table = db.table_dict.get(E2O_TABLE)
+    if e2o_table is None:
+        return set()
+
+    e2o_df = e2o_table.df
+    return set(
+        e2o_df.loc[
+            e2o_df[E2O_EVENT_ID_COL].isin(event_ids),
+            E2O_OBJECT_ID_COL,
+        ].dropna()
+    )
 
 
 def unzip_file(zip_path: str, extract_to: Optional[str] = None) -> None:
