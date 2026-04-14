@@ -1,34 +1,107 @@
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
 import torch
 import sklearn.metrics as skm
 from numpy.typing import NDArray
-from relbench.base import BaseTask, Table, TaskType
+from relbench.base import BaseTask, Database, Table, TaskType
 from relbench.modeling.graph import (
     AttachTargetTransform,
     NodeTrainTableInput,
     to_unix_time,
 )
 
-from task.utils.metric import roc_auc
+from data.const import OBJECT_ID_COL, OBJECT_TABLE, TIME_COL
+from task.metrics import roc_auc
 from .transform import TargetTransform
 
 
-class MEntityTask(BaseTask):
-    """Entity-style task with multiple foreign-key entity columns."""
+# ---------------------------------------------------------------------------
+# Per-task-type statistics helpers
+# Each function fills the `stats` dict for one task type. Keeping them small
+# and separate makes it easy to add a new task type without touching the rest.
+# ---------------------------------------------------------------------------
 
-    entity_cols: tuple[str, ...]
-    entity_tables: tuple[str, ...]
-    time_col: str
-    target_col: str
+def _stats_binary(df: pd.DataFrame, col: str, stats: dict) -> None:
+    # For binary tasks we mostly care about class balance.
+    stats["num_positives"] = int((df[col] == 1).sum())
+    stats["num_negatives"] = int((df[col] == 0).sum())
+
+
+def _stats_regression(df: pd.DataFrame, col: str, stats: dict) -> None:
+    # Regression targets: distribution shape matters more than raw counts.
+    quantiles = df[col].quantile([0.25, 0.5, 0.75])
+    stats["min_target"]         = df[col].min()
+    stats["max_target"]         = df[col].max()
+    stats["mean_target"]        = df[col].mean()
+    stats["quantile_25_target"] = quantiles.iloc[0]
+    stats["median_target"]      = quantiles.iloc[1]
+    stats["quantile_75_target"] = quantiles.iloc[2]
+
+
+def _stats_multilabel(df: pd.DataFrame, col: str, stats: dict) -> None:
+    # Multilabel: track how many labels each entity has and per-class frequency.
+    arr       = np.array([row for row in df[col]])
+    arr_row   = arr.sum(1)
+    arr_class = arr.sum(0)
+    max_idx   = int(arr_class.argmax())
+    min_idx   = int(arr_class.argmin())
+    stats["mean_num_classes_per_entity"] = round(float(arr_row.mean()), 4)
+    stats["max_num_classes_per_entity"]  = arr_row.max()
+    stats["min_num_classes_per_entity"]  = arr_row.min()
+    stats["max_num_class_idx"]           = max_idx
+    stats["max_num_class_num"]           = arr_class[max_idx]
+    stats["min_num_class_idx"]           = min_idx
+    stats["min_num_class_num"]           = arr_class[min_idx]
+
+
+_STATS_HANDLERS: dict[TaskType, Callable] = {
+    TaskType.BINARY_CLASSIFICATION:      _stats_binary,
+    TaskType.REGRESSION:                 _stats_regression,
+    TaskType.MULTILABEL_CLASSIFICATION:  _stats_multilabel,
+}
+
+
+# ---------------------------------------------------------------------------
+# Base task class
+# ---------------------------------------------------------------------------
+
+class MEntityTask(BaseTask):
+    """Entity-style task with one or more foreign-key entity columns.
+
+    Subclasses declare task_type, object_types, timedelta, metrics, and
+    implement make_table(). Everything else has sensible defaults for the
+    common single-entity case; pair-entity tasks override entity_cols and
+    entity_tables.
+    """
+
+    # Defaults for single-entity tasks (12 of 16 concrete classes use these).
+    # Pair-entity tasks that operate on O2O object pairs must override both.
+    entity_cols:   tuple[str, ...] = (OBJECT_ID_COL,)
+    entity_tables: tuple[str, ...] = (OBJECT_TABLE,)
+    time_col:   str = TIME_COL
+    target_col: str = "target"
+
     task_type: TaskType
     object_types: tuple[str, ...]
     num_eval_timestamps: int = 1
 
     def make_target_transform(self) -> TargetTransform | None:
         return None
+
+    def _make_table(self, df: pd.DataFrame) -> Table:
+        """Wraps a result DataFrame in the standard RelBench Table shape.
+
+        All tasks share the same structure: no primary key, entity columns
+        pointing into the shared object table, and a shared time column.
+        """
+        return Table(
+            df=df,
+            fkey_col_to_pkey_table=dict(zip(self.entity_cols, self.entity_tables)),
+            pkey_col=None,
+            time_col=self.time_col,
+        )
 
     def filter_dangling_entities(self, table: Table) -> Table:
         db = self.dataset.get_db()
@@ -48,6 +121,11 @@ class MEntityTask(BaseTask):
         target_table: Table | None = None,
         metrics=None,
     ) -> dict[str, float]:
+        """Evaluate predictions against ground truth.
+
+        Handles multiclass classification specially: f1 needs argmax first,
+        and roc_auc needs raw class scores rather than hard predictions.
+        """
         if metrics is None:
             metrics = self.metrics
 
@@ -72,10 +150,7 @@ class MEntityTask(BaseTask):
                 ))
                 continue
             if self.task_type == TaskType.MULTICLASS_CLASSIFICATION and metric_name == "roc_auc":
-                results["multiclass_roc_auc"] = roc_auc(
-                    target,
-                    pred,
-                )
+                results["multiclass_roc_auc"] = roc_auc(target, pred)
                 continue
             results[metric_name] = fn(target, pred)
 
@@ -89,14 +164,14 @@ class MEntityTask(BaseTask):
             split_stats = {}
             for timestamp in timestamps:
                 temp_df = table.df[table.df[self.time_col] == timestamp]
-                stats = {
+                s = {
                     "num_rows": len(temp_df),
                     "num_unique_entity_tuples": temp_df[list(self.entity_cols)].drop_duplicates().shape[0],
                 }
                 for entity_col in self.entity_cols:
-                    stats[f"num_unique_{entity_col}"] = temp_df[entity_col].nunique()
-                self._set_stats(temp_df, stats)
-                split_stats[str(timestamp)] = stats
+                    s[f"num_unique_{entity_col}"] = temp_df[entity_col].nunique()
+                self._set_stats(temp_df, s)
+                split_stats[str(timestamp)] = s
 
             split_stats["total"] = {
                 "num_rows": len(table.df),
@@ -135,41 +210,15 @@ class MEntityTask(BaseTask):
         return res
 
     def _set_stats(self, df: pd.DataFrame, stats: dict[str, Any]) -> None:
-        if self.task_type == TaskType.BINARY_CLASSIFICATION:
-            stats["num_positives"] = int((df[self.target_col] == 1).sum())
-            stats["num_negatives"] = int((df[self.target_col] == 0).sum())
-        elif self.task_type == TaskType.REGRESSION:
-            stats["min_target"] = df[self.target_col].min()
-            stats["max_target"] = df[self.target_col].max()
-            stats["mean_target"] = df[self.target_col].mean()
-            quantiles = df[self.target_col].quantile([0.25, 0.5, 0.75])
-            stats["quantile_25_target"] = quantiles.iloc[0]
-            stats["median_target"] = quantiles.iloc[1]
-            stats["quantile_75_target"] = quantiles.iloc[2]
-        elif self.task_type == TaskType.MULTILABEL_CLASSIFICATION:
-            arr = np.array([row for row in df[self.target_col]])
-            arr_row = arr.sum(1)
-            stats["mean_num_classes_per_entity"] = round(arr_row.mean(), 4)
-            stats["max_num_classes_per_entity"] = arr_row.max()
-            stats["min_num_classes_per_entity"] = arr_row.min()
-            arr_class = arr.sum(0)
-            max_num_class_idx = arr_class.argmax()
-            stats["max_num_class_idx"] = max_num_class_idx
-            stats["max_num_class_num"] = arr_class[max_num_class_idx]
-            min_num_class_idx = arr_class.argmin()
-            stats["min_num_class_idx"] = min_num_class_idx
-            stats["min_num_class_num"] = arr_class[min_num_class_idx]
-        else:
+        handler = _STATS_HANDLERS.get(self.task_type)
+        if handler is None:
             raise ValueError(f"Unsupported task type {self.task_type}")
+        handler(df, self.target_col, stats)
 
 
-def _get_target_tensor(task: "MEntityTask", df: pd.DataFrame) -> torch.Tensor:
-    if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
-        return torch.from_numpy(df[task.target_col].to_numpy(dtype=int, copy=True))
-    if task.task_type == TaskType.MULTILABEL_CLASSIFICATION:
-        return torch.from_numpy(np.stack(df[task.target_col].values)) # type: ignore
-    return torch.from_numpy(df[task.target_col].to_numpy(dtype=float, copy=True))
-
+# ---------------------------------------------------------------------------
+# Training table helper
+# ---------------------------------------------------------------------------
 
 def add_task_to_database(
     db: Any,
@@ -177,7 +226,22 @@ def add_task_to_database(
     task_name: str,
     col_to_stype_dict: dict,
 ) -> tuple[Any, dict[str, NodeTrainTableInput], TargetTransform | None]:
-    """Add one MEntityTask table to the database and return split loader inputs."""
+    """Add one MEntityTask's label table to the database and return split inputs.
+
+    Concatenates train/val/test DataFrames into a single label table (without
+    the target column), registers it in the database, then builds per-split
+    NodeTrainTableInput objects with time-shifted indices and optional target
+    normalization.
+    """
+
+    def target_tensor(df: pd.DataFrame) -> torch.Tensor:
+        # Each task type needs labels packed differently for the loss function.
+        if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
+            return torch.from_numpy(df[task.target_col].to_numpy(dtype=int, copy=True))
+        if task.task_type == TaskType.MULTILABEL_CLASSIFICATION:
+            return torch.from_numpy(np.stack(df[task.target_col].values))  # type: ignore
+        return torch.from_numpy(df[task.target_col].to_numpy(dtype=float, copy=True))
+
     labels_table_name = f"{task_name}_labels"
     split_frames: dict[str, pd.DataFrame] = {}
 
@@ -193,9 +257,7 @@ def add_task_to_database(
     )
     label_feature_df = label_df.drop(columns=[task.target_col])
 
-    fkey_col_to_pkey_table = {
-        col: table for col, table in zip(task.entity_cols, task.entity_tables)
-    }
+    fkey_col_to_pkey_table = dict(zip(task.entity_cols, task.entity_tables))
     db.table_dict[labels_table_name] = Table(
         df=label_feature_df,
         fkey_col_to_pkey_table=fkey_col_to_pkey_table,
@@ -207,14 +269,15 @@ def add_task_to_database(
     col_to_stype_dict[labels_table_name] = {}
     target_transform = task.make_target_transform()
     if target_transform is not None:
-        target_transform.fit(_get_target_tensor(task, split_frames["train"]))
+        target_transform.fit(target_tensor(split_frames["train"]))
+
     split_inputs: dict[str, NodeTrainTableInput] = {}
     start = 0
     for split in ["train", "val", "test"]:
         split_df = split_frames[split]
         stop = start + len(split_df)
         node_ids = torch.arange(start, stop, dtype=torch.long)
-        target = _get_target_tensor(task, split_df)
+        target = target_tensor(split_df)
         if target_transform is not None:
             target = target_transform.transform(target)
         split_inputs[split] = NodeTrainTableInput(

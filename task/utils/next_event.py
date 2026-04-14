@@ -1,18 +1,15 @@
-import duckdb
 import pandas as pd
 from relbench.base import Database
 
 from data.const import (
-    E2O_TABLE,
     EVENT_ID_COL,
-    EVENT_TABLE,
     EVENT_TYPE_COL,
     OBJECT_ID_COL,
-    OBJECT_TABLE,
     OBJECT_TYPE_COL,
     TIME_COL,
 )
 from data.wrapper import check_dbs
+from .db_utils import ocel_connection
 
 
 @check_dbs
@@ -22,16 +19,14 @@ def build_next_event_table(
     times: pd.Series,
     event_types: list[str] | None = None,
 ) -> pd.DataFrame:
-    event = db.table_dict[EVENT_TABLE].df
-    obj = db.table_dict[OBJECT_TABLE].df
-    e2o = db.table_dict[E2O_TABLE].df
-    times_df = pd.DataFrame({"obs_time": pd.to_datetime(times)})
-    con = duckdb.connect()
-    con.register("event", event)
-    con.register("obj", obj)
-    con.register("e2o", e2o)
-    con.register("times_df", times_df)
-    try:
+    """Build the next-event classification target for a given object type.
+
+    For each (object, observation_time) pair, finds the earliest future event
+    that the object is linked to, then encodes it as an integer class label.
+    If event_types is not provided, classes are inferred from the data and
+    sorted alphabetically.
+    """
+    with ocel_connection(db, times) as con:
         df = con.execute(
             f"""
             WITH typed_object AS (
@@ -73,11 +68,10 @@ def build_next_event_table(
             ORDER BY {OBJECT_ID_COL}, {TIME_COL}, {EVENT_ID_COL}
             """
         ).df()
-    finally:
-        con.close()
 
     if event_types is None:
         event_types = sorted(df["target"].dropna().unique())
+
     label_map = {name: idx for idx, name in enumerate(event_types)}
     encoded_target = df["target"].map(label_map)
     if encoded_target.isna().any():

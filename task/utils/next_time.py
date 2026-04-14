@@ -1,31 +1,25 @@
-import duckdb
 import pandas as pd
 from relbench.base import Database
 
 from data.const import (
-    E2O_TABLE,
     EVENT_ID_COL,
-    EVENT_TABLE,
     OBJECT_ID_COL,
-    OBJECT_TABLE,
     OBJECT_TYPE_COL,
     TIME_COL,
 )
 from data.wrapper import check_dbs
+from .db_utils import ocel_connection
 
 
 @check_dbs
 def build_next_time_table(db: Database, object_type: str, times: pd.Series) -> pd.DataFrame:
-    event = db.table_dict[EVENT_TABLE].df
-    obj = db.table_dict[OBJECT_TABLE].df
-    e2o = db.table_dict[E2O_TABLE].df
-    times_df = pd.DataFrame({"obs_time": pd.to_datetime(times)})
-    con = duckdb.connect()
-    con.register("event", event)
-    con.register("obj", obj)
-    con.register("e2o", e2o)
-    con.register("times_df", times_df)
-    try:
+    """Build the next-event time regression target for a given object type.
+
+    For each (object, observation_time) pair, returns the elapsed seconds
+    until the object's next linked event. Rows with no future events are
+    excluded (they have nothing meaningful to predict).
+    """
+    with ocel_connection(db, times) as con:
         return con.execute(
             f"""
             WITH typed_object AS (
@@ -67,5 +61,3 @@ def build_next_time_table(db: Database, object_type: str, times: pd.Series) -> p
             ORDER BY {OBJECT_ID_COL}, {TIME_COL}, {EVENT_ID_COL}
             """
         ).df()
-    finally:
-        con.close()

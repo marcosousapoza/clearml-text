@@ -1,4 +1,5 @@
 from .custom import MEntityTask, add_task_to_database
+from .db_utils import ocel_connection
 from .event_within import (
     build_complete_pair_event_within_table,
     build_event_within_table,
@@ -12,6 +13,7 @@ from .transform import Log1pZScoreTargetTransform, TargetTransform, ZScoreTarget
 __all__ = [
     "MEntityTask",
     "add_task_to_database",
+    "ocel_connection",
     "build_complete_pair_event_within_table",
     "build_event_within_table",
     "build_pair_event_within_table",
