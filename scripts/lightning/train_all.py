@@ -172,7 +172,7 @@ def _build_command(
     if accelerator == "gpu":
         command.extend(["--devices", "1"])
     if wandb:
-        command.extend(["--wandb", "--wandb_project", wandb_project])
+        command.extend(["--wandb", "--wandb-project", wandb_project])
     return command, log_path
 
 
