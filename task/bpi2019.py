@@ -62,7 +62,7 @@ class POItemNextEvent(MEntityTask):
         "Vendor creates invoice",
     ]
     num_classes = 40
-    metrics = [accuracy, f1]
+    metrics = [accuracy, f1, roc_auc]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
