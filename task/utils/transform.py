@@ -55,9 +55,9 @@ class Log1pZScoreTargetTransform(ZScoreTargetTransform):
 class QuantileTargetTransform(TargetTransform):
     """Wraps sklearn's QuantileTransformer to map targets to a normal distribution."""
 
-    def __init__(self, n_quantiles: int = 1000, output_distribution: Literal["uniform", "normal"] = "normal") -> None:
+    def __init__(self, n_quantiles: int = 1000, output_distribution: Literal["uniform", "normal"] = "uniform") -> None:
         self.n_quantiles = n_quantiles
-        self.output_distribution = output_distribution
+        self.output_distribution: Literal["uniform", "normal"] = output_distribution
 
     def fit(self, target: torch.Tensor, y=None):
         self._qt = _SKQuantileTransformer(
@@ -69,9 +69,9 @@ class QuantileTargetTransform(TargetTransform):
         return self
 
     def transform(self, target: torch.Tensor) -> torch.Tensor:
-        transformed = self._qt.transform(target.float().numpy().reshape(-1, 1))
+        transformed = self._qt.transform(target.float().cpu().numpy().reshape(-1, 1))
         return torch.from_numpy(transformed.reshape(-1)).float()
 
     def inverse_transform(self, target: torch.Tensor) -> torch.Tensor:
-        inversed = self._qt.inverse_transform(target.float().numpy().reshape(-1, 1))
+        inversed = self._qt.inverse_transform(target.float().cpu().numpy().reshape(-1, 1))
         return torch.from_numpy(inversed.reshape(-1)).float()
