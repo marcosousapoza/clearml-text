@@ -11,7 +11,7 @@ from data.cache import get_cache_root
 from task import TASK_SPECS
 
 
-TRAIN_ALL_SEEDS = (0, 1, 2, 3, 4, 5)
+TRAIN_ALL_SEEDS = (1, 2, 3, 4, 5)
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,7 @@ class TrainingJob:
     task: str
     seed: int
     command: list[str]
-    log_dir: Path
+    log_path: Path
 
 
 @dataclass(frozen=True)
@@ -79,14 +79,14 @@ def _build_jobs(accelerator: str, datasets: set[str], flatten: bool, epochs: int
         if datasets and dataset not in datasets:
             continue
         for seed in TRAIN_ALL_SEEDS:
-            command, log_dir = _build_command(dataset, task, accelerator, seed, flatten, epochs)
+            command, log_path = _build_command(dataset, task, accelerator, seed, flatten, epochs)
             jobs.append(
                 TrainingJob(
                     dataset=dataset,
                     task=task,
                     seed=seed,
                     command=command,
-                    log_dir=log_dir,
+                    log_path=log_path,
                 )
             )
     return jobs
@@ -123,10 +123,9 @@ def _run_job(job: TrainingJob, gpu_queue: Any, parent_env: dict[str, str] | None
         env = (parent_env or os.environ).copy()
         if gpu_id is not None:
             env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-        job.log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = job.log_dir / "train.log"
-        print(_display_command(job.command, gpu_id), f"  -> {log_path}", flush=True)
-        with open(log_path, "w") as log_file:
+        job.log_path.parent.mkdir(parents=True, exist_ok=True)
+        print(_display_command(job.command, gpu_id), f"  -> {job.log_path}", flush=True)
+        with open(job.log_path, "w") as log_file:
             completed = subprocess.run(job.command, env=env, check=False, stdout=log_file, stderr=log_file)
         return TrainingResult(job.dataset, job.task, job.seed, completed.returncode)
     finally:
@@ -143,6 +142,7 @@ def _build_command(
 ) -> tuple[list[str], Path]:
     run_name = f"{dataset}_{task}{'_flat' if flatten else ''}"
     root_dir = get_cache_root() / run_name / "lightning" / f"seed_{seed}"
+    log_path = get_cache_root() / ".logs" / run_name / f"seed_{seed}.log"
     command = [
         sys.executable,
         "-m",
@@ -164,7 +164,7 @@ def _build_command(
         command.append("--flatten")
     if accelerator == "gpu":
         command.extend(["--devices", "1"])
-    return command, root_dir
+    return command, log_path
 
 
 def _display_command(command: list[str], gpu_id: str | None) -> str:

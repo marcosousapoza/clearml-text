@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
-from lightning.pytorch.loggers import CSVLogger, WandbLogger
+from lightning.pytorch.loggers import CSVLogger, WandbLogger, Logger
 from torch_geometric.seed import seed_everything
 
 from .data import RelbenchLightningDataModule
@@ -36,6 +36,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--flatten", action="store_true")
     parser.add_argument("--ckpt_path", type=str, default=None)
     parser.add_argument("--fast_dev_run", action="store_true")
+    parser.add_argument("--wandb", action="store_true", help="Also log metrics to Weights & Biases.")
+    parser.add_argument("--wandb_project", type=str, default="ocel-ocp")
     return parser
 
 
@@ -79,10 +81,18 @@ def main(argv: list[str] | None = None) -> None:
     root_dir = Path(args.default_root_dir) if args.default_root_dir else (
         datamodule.artifacts.cache_root / run_name / "lightning"
     )
-    loggers = [
+    loggers: list[Logger] = [
         CSVLogger(save_dir=str(root_dir), name="logs"),
-        WandbLogger(project="ocel-ocp", name=run_name, config=vars(args), save_dir=str(root_dir)),
     ]
+    if args.wandb:
+        loggers.append(
+            WandbLogger(
+                project=args.wandb_project,
+                name=run_name,
+                config=vars(args),
+                save_dir=str(root_dir),
+            )
+        )
     checkpoint_callback = ModelCheckpoint(
         dirpath=str(root_dir / "checkpoints"),
         filename="epoch={epoch:02d}-{" + module.checkpoint_monitor.replace("/", "_") + ":.4f}",

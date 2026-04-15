@@ -13,7 +13,7 @@ import torch
 from data.cache import configure_cache_environment
 from relbench.base import Dataset
 from relbench.datasets import get_dataset
-from relbench.modeling.graph import make_pkey_fkey_graph
+from data.graph import make_ocel_graph
 from relbench.modeling.utils import get_stype_proposal
 from relbench.tasks import get_task
 from scripts.text_embedder import GloveTextEmbedding
@@ -91,7 +91,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         if self.flatten:
             db.reindex_pkeys_and_fkeys()
         graph_cache_name = f"{self.dataset_name}_{self.task_name}{'_flat' if self.flatten else ''}"
-        data, col_stats_dict = make_pkey_fkey_graph(
+        data, col_stats_dict = make_ocel_graph(
             db,
             col_to_stype_dict=col_to_stype_dict,
             text_embedder_cfg=TextEmbedderConfig(
