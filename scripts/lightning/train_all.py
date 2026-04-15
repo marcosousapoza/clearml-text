@@ -47,8 +47,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--accelerator", type=str, default=None, help="Accelerator override (e.g. cpu, gpu). Defaults to gpu if available, else cpu.")
     parser.add_argument("--epochs", type=int, default=None, help="Number of training epochs. Defaults to the scripts.lightning default.")
     parser.add_argument("--wandb", action="store_true", help="Also log metrics to Weights & Biases.")
-    parser.add_argument("--wandb_project", type=str, default="ocel-ocp", help="W&B project name.")
-    parser.add_argument("--jobs_per_gpu", type=int, default=1, help="Number of training jobs to run in parallel per GPU.")
+    parser.add_argument("--wandb-project", type=str, default="ocel-ocp", help="W&B project name.")
+    parser.add_argument("--jobs-per-gpu", type=int, default=1, help="Number of training jobs to run in parallel per GPU.")
     args = parser.parse_args(argv)
 
     gpu_count = torch.cuda.device_count()
