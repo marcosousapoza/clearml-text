@@ -32,7 +32,6 @@ from .const import (
     O2O_TABLE,
     O2O_DST_COL,
     O2O_SRC_COL,
-    QUALIFIER_COL,
 )
 
 
@@ -42,8 +41,7 @@ def _is_uninformative(db: Database, table_name: str) -> bool:
     A table is considered uninformative when its only non-key, non-time
     columns are either:
     - absent entirely, or
-    - only ``qualifier`` (a structural OCEL relation label with no predictive
-      signal beyond the graph topology already captured by the metapath edges).
+    - absent entirely.
     """
     if table_name not in db.table_dict:
         return False
@@ -56,7 +54,6 @@ def _is_uninformative(db: Database, table_name: str) -> bool:
     skip.update(table.fkey_col_to_pkey_table.keys())
     if table.time_col is not None:
         skip.add(table.time_col)
-    skip.add(QUALIFIER_COL)
 
     informative = [c for c in df.columns if c not in skip]
     return len(informative) == 0
