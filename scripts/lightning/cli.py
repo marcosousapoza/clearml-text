@@ -25,7 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--num-neighbors", type=int, default=128)
     parser.add_argument("--temporal_strategy", type=str, default="uniform")
     parser.add_argument("--max_steps_per_epoch", type=int, default=2000)
-    parser.add_argument("--num-workers", type=int, default=2)
+    parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--cache-dir", type=str, default=None)
     parser.add_argument("--accelerator", type=str, default="auto")
