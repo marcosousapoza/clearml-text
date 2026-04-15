@@ -60,6 +60,6 @@ def build_remaining_time_table(db: Database, object_type: str, times: pd.Series)
                 CAST(EXTRACT(epoch FROM (last_event_time - {TIME_COL})) AS DOUBLE) AS target
             FROM ranked
             WHERE rn = 1
-            ORDER BY {OBJECT_ID_COL}, {TIME_COL}, {EVENT_ID_COL}
+            ORDER BY {OBJECT_ID_COL}, {TIME_COL}
             """
         ).df()

@@ -85,7 +85,7 @@ class MEntityTask(BaseTask):
 
     task_type: TaskType
     object_types: tuple[str, ...]
-    num_eval_timestamps: int = 1
+    num_eval_timestamps: int = 1000 # very large number to generate all validation observations
 
     def make_target_transform(self) -> TargetTransform | None:
         return None

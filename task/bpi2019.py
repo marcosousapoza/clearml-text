@@ -17,7 +17,7 @@ from .utils import (
 
 class POItemNextEvent(MEntityTask):
     timedelta = pd.Timedelta(days=14)
-    num_eval_timestamps = 40
+
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("POItem",)
     event_types = [
@@ -74,7 +74,7 @@ class POItemNextEvent(MEntityTask):
 
 class POItemNextTime(MEntityTask):
     timedelta = pd.Timedelta(days=14)
-    num_eval_timestamps = 40
+
     task_type = TaskType.REGRESSION
     object_types = ("POItem",)
     metrics = [mae, mse, rmse, r2]
@@ -90,7 +90,7 @@ class POItemNextTime(MEntityTask):
 
 class POItemRemainingTime(MEntityTask):
     timedelta = pd.Timedelta(days=14)
-    num_eval_timestamps = 40
+
     task_type = TaskType.REGRESSION
     object_types = ("POItem",)
     metrics = [mae, mse, rmse, r2]
@@ -106,7 +106,7 @@ class POItemRemainingTime(MEntityTask):
 
 class POItemVendorClearInvoiceWithin30Days(MEntityTask):
     timedelta = pd.Timedelta(days=30)
-    num_eval_timestamps = 40
+
     task_type = TaskType.BINARY_CLASSIFICATION
     # Pair-entity task: src = POItem, dst = Vendor
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)

@@ -17,7 +17,7 @@ from .utils import (
 
 class ContainerNextEvent(MEntityTask):
     timedelta = pd.Timedelta(hours=12)
-    num_eval_timestamps = 40
+
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("Container",)
     event_types = [
@@ -43,7 +43,7 @@ class ContainerNextEvent(MEntityTask):
 
 class ContainerNextTime(MEntityTask):
     timedelta = pd.Timedelta(hours=12)
-    num_eval_timestamps = 40
+
     task_type = TaskType.REGRESSION
     object_types = ("Container",)
     metrics = [mae, mse, rmse, r2]
@@ -59,7 +59,7 @@ class ContainerNextTime(MEntityTask):
 
 class ContainerRemainingTime(MEntityTask):
     timedelta = pd.Timedelta(hours=12)
-    num_eval_timestamps = 40
+
     task_type = TaskType.REGRESSION
     object_types = ("Container",)
     metrics = [mae, mse, rmse, r2]
@@ -75,7 +75,7 @@ class ContainerRemainingTime(MEntityTask):
 
 class TransportDocumentVehicleDepartWithin7Days(MEntityTask):
     timedelta = pd.Timedelta(days=7)
-    num_eval_timestamps = 40
+
     task_type = TaskType.BINARY_CLASSIFICATION
     # Pair-entity task: src = Transport Document, dst = Vehicle
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)

@@ -17,7 +17,7 @@ from .utils import (
 
 class OrderNextEvent(MEntityTask):
     timedelta = pd.Timedelta(days=7)
-    num_eval_timestamps = 40
+
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("orders",)
     event_types = [
@@ -37,7 +37,7 @@ class OrderNextEvent(MEntityTask):
 
 class OrderNextTime(MEntityTask):
     timedelta = pd.Timedelta(days=7)
-    num_eval_timestamps = 40
+
     task_type = TaskType.REGRESSION
     object_types = ("orders",)
     metrics = [mae, mse, rmse, r2]
@@ -53,7 +53,7 @@ class OrderNextTime(MEntityTask):
 
 class OrderRemainingTime(MEntityTask):
     timedelta = pd.Timedelta(days=7)
-    num_eval_timestamps = 40
+
     task_type = TaskType.REGRESSION
     object_types = ("orders",)
     metrics = [mae, mse, rmse, r2]
@@ -69,7 +69,7 @@ class OrderRemainingTime(MEntityTask):
 
 class CustomerProductPlaceOrderWithin14Days(MEntityTask):
     timedelta = pd.Timedelta(days=14)
-    num_eval_timestamps = 40
+
     task_type = TaskType.BINARY_CLASSIFICATION
     # Complete cartesian pair task: every customer × every product combination
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)

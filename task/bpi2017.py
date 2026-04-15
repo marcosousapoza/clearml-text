@@ -16,7 +16,6 @@ from .utils import (
 
 class ApplicationNextEvent(MEntityTask):
     timedelta = pd.Timedelta(days=7)
-    num_eval_timestamps = 40
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("Application",)
     event_types = [
@@ -43,7 +42,6 @@ class ApplicationNextEvent(MEntityTask):
 
 class CaseRNextTime(MEntityTask):
     timedelta = pd.Timedelta(days=7)
-    num_eval_timestamps = 40
     task_type = TaskType.REGRESSION
     object_types = ("Case_R",)
     metrics = [mae, mse, rmse, r2]
@@ -59,7 +57,6 @@ class CaseRNextTime(MEntityTask):
 
 class CaseRRemainingTime(MEntityTask):
     timedelta = pd.Timedelta(days=7)
-    num_eval_timestamps = 40
     task_type = TaskType.REGRESSION
     object_types = ("Case_R",)
     metrics = [mae, mse, rmse, r2]

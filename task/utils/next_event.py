@@ -65,7 +65,7 @@ def build_next_event_table(
                 target
             FROM ranked
             WHERE rn = 1
-            ORDER BY {OBJECT_ID_COL}, {TIME_COL}, {EVENT_ID_COL}
+            ORDER BY {OBJECT_ID_COL}, {TIME_COL}
             """
         ).df()
 
