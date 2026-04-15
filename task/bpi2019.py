@@ -45,6 +45,7 @@ class POItemNextEvent(MEntityTask):
         "Record Service Entry Sheet",
         "Record Subsequent Invoice",
         "Release Purchase Order",
+        "Release Purchase Requisition",
         "Remove Payment Block",
         "SRM: Awaiting Approval",
         "SRM: Change was Transmitted",
@@ -57,12 +58,13 @@ class POItemNextEvent(MEntityTask):
         "SRM: Incomplete",
         "SRM: Ordered",
         "SRM: Transaction Completed",
+        "SRM: Transfer Failed (E.Sys.)",
         "Set Payment Block",
         "Update Order Confirmation",
         "Vendor creates debit memo",
         "Vendor creates invoice",
     ]
-    num_classes = 40
+    num_classes = 42
     metrics = [accuracy, f1, roc_auc]
 
     @check_dbs
@@ -100,8 +102,8 @@ class POItemRemainingTime(MEntityTask):
         )
 
 
-class POItemClearInvoiceWithin30Days(MEntityTask):
-    timedelta = pd.Timedelta(days=30)
+class POItemClearInvoiceWithin14Days(MEntityTask):
+    timedelta = pd.Timedelta(days=14)
     task_type = TaskType.BINARY_CLASSIFICATION
     object_types = ("POItem",)
     metrics = [accuracy, f1, auprc, roc_auc]
@@ -119,8 +121,8 @@ class POItemClearInvoiceWithin30Days(MEntityTask):
         )
 
 
-class POItemVendorClearInvoiceWithin30Days(MEntityTask):
-    timedelta = pd.Timedelta(days=30)
+class POItemVendorClearInvoiceWithin14Days(MEntityTask):
+    timedelta = pd.Timedelta(days=14)
 
     task_type = TaskType.BINARY_CLASSIFICATION
     # Pair-entity task: src = POItem, dst = Vendor

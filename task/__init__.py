@@ -13,11 +13,11 @@ from .bpi2017 import (
     OfferCancelledWithin30Days,
 )
 from .bpi2019 import (
-    POItemClearInvoiceWithin30Days,
+    POItemClearInvoiceWithin14Days,
     POItemNextEvent,
     POItemNextTime,
     POItemRemainingTime,
-    POItemVendorClearInvoiceWithin30Days,
+    POItemVendorClearInvoiceWithin14Days,
 )
 from .container_logistics import (
     ContainerDepartWithin7Days,
@@ -43,8 +43,8 @@ TASK_SPECS = (
     ("bpi2019", "next_event_po_items", POItemNextEvent),
     ("bpi2019", "next_time_po_items", POItemNextTime),
     ("bpi2019", "remaining_time_po_items", POItemRemainingTime),
-    ("bpi2019", "po_item_clear_invoice_within_30d", POItemClearInvoiceWithin30Days),
-    ("bpi2019", "event_within", POItemVendorClearInvoiceWithin30Days),
+    ("bpi2019", "po_item_clear_invoice_within_14d", POItemClearInvoiceWithin14Days),
+    ("bpi2019", "event_within", POItemVendorClearInvoiceWithin14Days),
     ("order_management", "next_event_orders", OrderNextEvent),
     ("order_management", "next_time_orders", OrderNextTime),
     ("order_management", "remaining_time_orders", OrderRemainingTime),
