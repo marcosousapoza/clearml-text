@@ -10,7 +10,7 @@ from .bpi2017 import (
     ApplicationNextEvent,
     CaseRNextTime,
     CaseRRemainingTime,
-    OfferCancelledWithin30Days,
+    OfferCancelledWithin14Days,
 )
 from .bpi2019 import (
     POItemClearInvoiceWithin14Days,
@@ -39,7 +39,7 @@ TASK_SPECS = (
     ("bpi2017", "next_time_cases", CaseRNextTime),
     ("bpi2017", "remaining_time_cases", CaseRRemainingTime),
     ("bpi2017", "application_completed_within_14d", ApplicationCompletedWithin14Days),
-    ("bpi2017", "event_within", OfferCancelledWithin30Days),
+    ("bpi2017", "event_within", OfferCancelledWithin14Days),
     ("bpi2019", "next_event_po_items", POItemNextEvent),
     ("bpi2019", "next_time_po_items", POItemNextTime),
     ("bpi2019", "remaining_time_po_items", POItemRemainingTime),

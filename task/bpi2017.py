@@ -84,8 +84,8 @@ class ApplicationCompletedWithin14Days(MEntityTask):
         )
 
 
-class OfferCancelledWithin30Days(MEntityTask):
-    timedelta = pd.Timedelta(days=30)
+class OfferCancelledWithin14Days(MEntityTask):
+    timedelta = pd.Timedelta(days=14)
     num_eval_timestamps = 1
     task_type = TaskType.BINARY_CLASSIFICATION
     object_types = ("Offer",)
