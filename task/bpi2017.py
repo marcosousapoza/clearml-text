@@ -5,6 +5,7 @@ from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
 
 from data.wrapper import check_dbs
 from .utils import (
+    QuantileTargetTransform,
     MEntityTask,
     build_event_within_table,
     build_next_event_table,
@@ -47,6 +48,8 @@ class CaseRNextTime(MEntityTask):
     object_types = ("Case_R",)
     metrics = [mae, mse, rmse, r2]
 
+    def make_target_transform(self): return QuantileTargetTransform()
+
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return self._make_table(
@@ -60,6 +63,8 @@ class CaseRRemainingTime(MEntityTask):
     task_type = TaskType.REGRESSION
     object_types = ("Case_R",)
     metrics = [mae, mse, rmse, r2]
+
+    def make_target_transform(self): return QuantileTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:

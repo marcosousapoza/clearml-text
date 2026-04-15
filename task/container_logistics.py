@@ -6,6 +6,7 @@ from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
 from data.const import O2O_DST_COL, O2O_SRC_COL, OBJECT_TABLE
 from data.wrapper import check_dbs
 from .utils import (
+    QuantileTargetTransform,
     MEntityTask,
     build_next_event_table,
     build_next_time_table,
@@ -19,7 +20,7 @@ class ContainerNextEvent(MEntityTask):
     num_eval_timestamps = 40
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("Container",)
-    event_types = (
+    event_types = [
         "Bring to Loading Bay",
         "Depart",
         "Drive to Terminal",
@@ -29,7 +30,7 @@ class ContainerNextEvent(MEntityTask):
         "Place in Stock",
         "Reschedule Container",
         "Weigh",
-    )
+    ]
     num_classes = 9
     metrics = [accuracy, f1, roc_auc]
 
@@ -47,6 +48,8 @@ class ContainerNextTime(MEntityTask):
     object_types = ("Container",)
     metrics = [mae, mse, rmse, r2]
 
+    def make_target_transform(self): return QuantileTargetTransform()
+
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return self._make_table(
@@ -60,6 +63,8 @@ class ContainerRemainingTime(MEntityTask):
     task_type = TaskType.REGRESSION
     object_types = ("Container",)
     metrics = [mae, mse, rmse, r2]
+
+    def make_target_transform(self): return QuantileTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:

@@ -8,7 +8,7 @@ from .event_within import (
 from .next_event import build_next_event_table
 from .next_time import build_next_time_table
 from .remaining_time import build_remaining_time_table
-from .transform import Log1pZScoreTargetTransform, TargetTransform, ZScoreTargetTransform
+from .transform import Log1pZScoreTargetTransform, QuantileTargetTransform, TargetTransform, ZScoreTargetTransform
 
 __all__ = [
     "MEntityTask",
@@ -21,6 +21,7 @@ __all__ = [
     "build_next_time_table",
     "build_remaining_time_table",
     "Log1pZScoreTargetTransform",
+    "QuantileTargetTransform",
     "TargetTransform",
     "ZScoreTargetTransform",
 ]

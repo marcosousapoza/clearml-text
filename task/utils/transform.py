@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from typing import Literal
+
 import torch
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.preprocessing import QuantileTransformer as _SKQuantileTransformer
 
 
 class TargetTransform(BaseEstimator, TransformerMixin):
@@ -47,3 +50,28 @@ class Log1pZScoreTargetTransform(ZScoreTargetTransform):
 
     def inverse_transform(self, target: torch.Tensor) -> torch.Tensor:
         return torch.expm1(super().inverse_transform(target))
+
+
+class QuantileTargetTransform(TargetTransform):
+    """Wraps sklearn's QuantileTransformer to map targets to a normal distribution."""
+
+    def __init__(self, n_quantiles: int = 1000, output_distribution: Literal["uniform", "normal"] = "normal") -> None:
+        self.n_quantiles = n_quantiles
+        self.output_distribution = output_distribution
+
+    def fit(self, target: torch.Tensor, y=None):
+        self._qt = _SKQuantileTransformer(
+            n_quantiles=self.n_quantiles,
+            output_distribution=self.output_distribution,
+            subsample=int(1e9),
+        )
+        self._qt.fit(target.float().numpy().reshape(-1, 1))
+        return self
+
+    def transform(self, target: torch.Tensor) -> torch.Tensor:
+        transformed = self._qt.transform(target.float().numpy().reshape(-1, 1))
+        return torch.from_numpy(transformed.reshape(-1)).float()
+
+    def inverse_transform(self, target: torch.Tensor) -> torch.Tensor:
+        inversed = self._qt.inverse_transform(target.float().numpy().reshape(-1, 1))
+        return torch.from_numpy(inversed.reshape(-1)).float()
