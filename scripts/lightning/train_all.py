@@ -48,17 +48,18 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--epochs", type=int, default=None, help="Number of training epochs. Defaults to the scripts.lightning default.")
     parser.add_argument("--wandb", action="store_true", help="Also log metrics to Weights & Biases.")
     parser.add_argument("--wandb_project", type=str, default="ocel-ocp", help="W&B project name.")
+    parser.add_argument("--jobs_per_gpu", type=int, default=1, help="Number of training jobs to run in parallel per GPU.")
     args = parser.parse_args(argv)
 
     gpu_count = torch.cuda.device_count()
     gpu_ids = _visible_gpu_ids(gpu_count)
-    parallelism = len(gpu_ids) if gpu_ids else 1
+    parallelism = len(gpu_ids) * args.jobs_per_gpu if gpu_ids else 1
     accelerator = args.accelerator or ("gpu" if gpu_ids else "cpu")
     if accelerator == "cpu":
         gpu_ids = []
     jobs = _build_jobs(accelerator, set(args.dataset), args.flatten, args.epochs, args.wandb, args.wandb_project)
 
-    failures = _run_jobs(jobs, gpu_ids, parallelism)
+    failures = _run_jobs(jobs, gpu_ids, parallelism, args.jobs_per_gpu)
     if failures:
         print("Failed tasks:")
         for dataset, task, seed, return_code in failures:
@@ -98,6 +99,7 @@ def _run_jobs(
     jobs: list[TrainingJob],
     gpu_ids: list[str],
     parallelism: int,
+    jobs_per_gpu: int = 1,
 ) -> list[tuple[str, str, int, int]]:
     # Capture the parent's environment (including .env variables loaded by load_env())
     # before spawning workers, because spawn workers start with the OS environment and
@@ -108,7 +110,8 @@ def _run_jobs(
     with ctx.Manager() as manager:
         gpu_queue = manager.Queue()
         for gpu_id in gpu_ids or [None]:
-            gpu_queue.put(gpu_id)
+            for _ in range(jobs_per_gpu):
+                gpu_queue.put(gpu_id)
 
         failures = []
         worker = partial(_run_job, gpu_queue=gpu_queue, parent_env=parent_env)
