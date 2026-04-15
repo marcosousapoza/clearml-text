@@ -97,6 +97,11 @@ def _run_jobs(
     gpu_ids: list[str],
     parallelism: int,
 ) -> list[tuple[str, str, int, int]]:
+    # Capture the parent's environment (including .env variables loaded by load_env())
+    # before spawning workers, because spawn workers start with the OS environment and
+    # do not inherit changes made to os.environ in the parent process.
+    parent_env = os.environ.copy()
+
     ctx = mp.get_context("spawn")
     with ctx.Manager() as manager:
         gpu_queue = manager.Queue()
@@ -104,7 +109,7 @@ def _run_jobs(
             gpu_queue.put(gpu_id)
 
         failures = []
-        worker = partial(_run_job, gpu_queue=gpu_queue)
+        worker = partial(_run_job, gpu_queue=gpu_queue, parent_env=parent_env)
         with ctx.Pool(processes=parallelism) as pool:
             for result in pool.imap_unordered(worker, jobs, chunksize=1):
                 if result.return_code != 0:
@@ -112,10 +117,10 @@ def _run_jobs(
         return failures
 
 
-def _run_job(job: TrainingJob, gpu_queue: Any) -> TrainingResult:
+def _run_job(job: TrainingJob, gpu_queue: Any, parent_env: dict[str, str] | None = None) -> TrainingResult:
     gpu_id = gpu_queue.get()
     try:
-        env = os.environ.copy()
+        env = (parent_env or os.environ).copy()
         if gpu_id is not None:
             env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
         job.log_dir.mkdir(parents=True, exist_ok=True)
