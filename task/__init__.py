@@ -6,18 +6,21 @@ from relbench.base import BaseTask
 from relbench.tasks import get_task, register_task
 
 from .bpi2017 import (
+    ApplicationCompletedWithin14Days,
     ApplicationNextEvent,
     CaseRNextTime,
     CaseRRemainingTime,
     OfferCancelledWithin30Days,
 )
 from .bpi2019 import (
+    POItemClearInvoiceWithin30Days,
     POItemNextEvent,
     POItemNextTime,
     POItemRemainingTime,
     POItemVendorClearInvoiceWithin30Days,
 )
 from .container_logistics import (
+    ContainerDepartWithin7Days,
     ContainerNextEvent,
     ContainerNextTime,
     ContainerRemainingTime,
@@ -35,10 +38,12 @@ TASK_SPECS = (
     ("bpi2017", "next_event_cases", ApplicationNextEvent),
     ("bpi2017", "next_time_cases", CaseRNextTime),
     ("bpi2017", "remaining_time_cases", CaseRRemainingTime),
+    ("bpi2017", "application_completed_within_14d", ApplicationCompletedWithin14Days),
     ("bpi2017", "event_within", OfferCancelledWithin30Days),
     ("bpi2019", "next_event_po_items", POItemNextEvent),
     ("bpi2019", "next_time_po_items", POItemNextTime),
     ("bpi2019", "remaining_time_po_items", POItemRemainingTime),
+    ("bpi2019", "po_item_clear_invoice_within_30d", POItemClearInvoiceWithin30Days),
     ("bpi2019", "event_within", POItemVendorClearInvoiceWithin30Days),
     ("order_management", "next_event_orders", OrderNextEvent),
     ("order_management", "next_time_orders", OrderNextTime),
@@ -47,6 +52,7 @@ TASK_SPECS = (
     ("container_logistics", "next_event_containers", ContainerNextEvent),
     ("container_logistics", "next_time_containers", ContainerNextTime),
     ("container_logistics", "remaining_time_containers", ContainerRemainingTime),
+    ("container_logistics", "container_depart_within_7d", ContainerDepartWithin7Days),
     ("container_logistics", "event_within", TransportDocumentVehicleDepartWithin7Days),
 )
 

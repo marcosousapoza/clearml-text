@@ -6,8 +6,8 @@ from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
 from data.const import O2O_DST_COL, O2O_SRC_COL, OBJECT_TABLE
 from data.wrapper import check_dbs
 from .utils import (
-    QuantileTargetTransform,
     MEntityTask,
+    build_event_within_table,
     build_next_event_table,
     build_next_time_table,
     build_pair_event_within_table,
@@ -48,8 +48,6 @@ class ContainerNextTime(MEntityTask):
     object_types = ("Container",)
     metrics = [mae, mse, rmse, r2]
 
-    def make_target_transform(self): return QuantileTargetTransform()
-
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return self._make_table(
@@ -64,12 +62,29 @@ class ContainerRemainingTime(MEntityTask):
     object_types = ("Container",)
     metrics = [mae, mse, rmse, r2]
 
-    def make_target_transform(self): return QuantileTargetTransform()
-
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return self._make_table(
             build_remaining_time_table(db, self.object_types[0], timestamps)
+        )
+
+
+class ContainerDepartWithin7Days(MEntityTask):
+    timedelta = pd.Timedelta(days=7)
+    task_type = TaskType.BINARY_CLASSIFICATION
+    object_types = ("Container",)
+    metrics = [accuracy, f1, auprc, roc_auc]
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        return self._make_table(
+            build_event_within_table(
+                db=db,
+                object_type="Container",
+                event_type="Depart",
+                times=timestamps,
+                delta=self.timedelta,
+            )
         )
 
 

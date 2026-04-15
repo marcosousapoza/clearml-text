@@ -57,7 +57,7 @@ def build_remaining_time_table(db: Database, object_type: str, times: pd.Series)
             SELECT
                 {OBJECT_ID_COL},
                 {TIME_COL},
-                CAST(EXTRACT(epoch FROM (last_event_time - {TIME_COL})) AS DOUBLE) AS target
+                CAST(EXTRACT(epoch FROM (last_event_time - {TIME_COL})) AS DOUBLE) / 86400.0 AS target
             FROM ranked
             WHERE rn = 1
             ORDER BY {OBJECT_ID_COL}, {TIME_COL}

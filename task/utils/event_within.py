@@ -18,7 +18,7 @@ from .db_utils import ocel_connection
 def build_event_within_table(
     db: Database,
     object_type: str,
-    event_type: str,
+    event_type: str | list[str],
     times: pd.Series,
     delta: pd.Timedelta,
 ) -> pd.DataFrame:
@@ -28,10 +28,19 @@ def build_event_within_table(
     type occurs within `delta` seconds of that observation, 0 otherwise.
     Only includes objects that have not yet experienced the target event at
     observation time — once an object has done it, it is no longer a candidate.
+
+    `event_type` may be a single string or a list of strings; when a list is
+    given, any matching event type satisfies the condition.
     """
     # Deduplicate and sort observation times so DuckDB processes fewer rows.
     times_sorted = pd.to_datetime(times).sort_values().unique()
     future_window = f"{int(delta.total_seconds())} seconds"
+
+    if isinstance(event_type, list):
+        quoted = ", ".join(f"'{t}'" for t in event_type)
+        event_type_filter = f"{EVENT_TYPE_COL} IN ({quoted})"
+    else:
+        event_type_filter = f"{EVENT_TYPE_COL} = '{event_type}'"
 
     with ocel_connection(db, times_sorted) as con:
         return con.execute(
@@ -64,7 +73,7 @@ def build_event_within_table(
                     {OBJECT_ID_COL},
                     MIN({TIME_COL}) AS first_target_time
                 FROM object_events
-                WHERE {EVENT_TYPE_COL} = '{event_type}'
+                WHERE {event_type_filter}
                 GROUP BY {OBJECT_ID_COL}
             ),
             candidates AS (

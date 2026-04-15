@@ -5,7 +5,6 @@ from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
 
 from data.wrapper import check_dbs
 from .utils import (
-    QuantileTargetTransform,
     MEntityTask,
     build_event_within_table,
     build_next_event_table,
@@ -46,8 +45,6 @@ class CaseRNextTime(MEntityTask):
     object_types = ("Case_R",)
     metrics = [mae, mse, rmse, r2]
 
-    def make_target_transform(self): return QuantileTargetTransform()
-
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return self._make_table(
@@ -61,12 +58,29 @@ class CaseRRemainingTime(MEntityTask):
     object_types = ("Case_R",)
     metrics = [mae, mse, rmse, r2]
 
-    def make_target_transform(self): return QuantileTargetTransform()
-
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return self._make_table(
             build_remaining_time_table(db, self.object_types[0], timestamps)
+        )
+
+
+class ApplicationCompletedWithin14Days(MEntityTask):
+    timedelta = pd.Timedelta(days=14)
+    task_type = TaskType.BINARY_CLASSIFICATION
+    object_types = ("Application",)
+    metrics = [accuracy, f1, auprc, roc_auc]
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        return self._make_table(
+            build_event_within_table(
+                db=db,
+                object_type="Application",
+                event_type=["A_Accepted", "A_Denied", "A_Cancelled"],
+                times=timestamps,
+                delta=self.timedelta,
+            )
         )
 
 

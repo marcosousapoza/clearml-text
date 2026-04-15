@@ -6,8 +6,8 @@ from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
 from data.const import O2O_DST_COL, O2O_SRC_COL, OBJECT_TABLE
 from data.wrapper import check_dbs
 from .utils import (
-    QuantileTargetTransform,
     MEntityTask,
+    build_event_within_table,
     build_next_event_table,
     build_next_time_table,
     build_pair_event_within_table,
@@ -79,8 +79,6 @@ class POItemNextTime(MEntityTask):
     object_types = ("POItem",)
     metrics = [mae, mse, rmse, r2]
 
-    def make_target_transform(self): return QuantileTargetTransform()
-
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return self._make_table(
@@ -95,12 +93,29 @@ class POItemRemainingTime(MEntityTask):
     object_types = ("POItem",)
     metrics = [mae, mse, rmse, r2]
 
-    def make_target_transform(self): return QuantileTargetTransform()
-
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         return self._make_table(
             build_remaining_time_table(db, self.object_types[0], timestamps)
+        )
+
+
+class POItemClearInvoiceWithin30Days(MEntityTask):
+    timedelta = pd.Timedelta(days=30)
+    task_type = TaskType.BINARY_CLASSIFICATION
+    object_types = ("POItem",)
+    metrics = [accuracy, f1, auprc, roc_auc]
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        return self._make_table(
+            build_event_within_table(
+                db=db,
+                object_type="POItem",
+                event_type="Clear Invoice",
+                times=timestamps,
+                delta=self.timedelta,
+            )
         )
 
 
