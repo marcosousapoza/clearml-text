@@ -5,6 +5,8 @@ import zipfile
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from relbench.base.database import Database
 from relbench.base.table import Table
 
@@ -143,9 +145,27 @@ def download_file(uri: str, cache_dir: str) -> str:
     if os.path.exists(download_path):
         return download_path
 
-    # Stream download
-    response = requests.get(uri, stream=True)
-    response.raise_for_status()
+    # Stream download with retry logic for flaky SSL connections (e.g. data.4tu.nl)
+    retry = Retry(
+        total=5,
+        backoff_factor=1,
+        status_forcelist=[500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    session = requests.Session()
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    last_exc: Exception | None = None
+    for attempt in range(1, 6):
+        try:
+            response = session.get(uri, stream=True, timeout=60)
+            response.raise_for_status()
+            break
+        except requests.exceptions.SSLError as exc:
+            last_exc = exc
+            if attempt < 5:
+                import time; time.sleep(2 ** attempt)
+    else:
+        raise RuntimeError(f"Failed to download {uri} after 5 attempts") from last_exc
     with open(download_path, "wb") as f:
         for chunk in response.iter_content(chunk_size=8192):
             if chunk:

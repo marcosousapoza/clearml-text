@@ -162,7 +162,7 @@ def _build_command(
         accelerator,
         "--seed",
         str(seed),
-        "--default_root_dir",
+        "--default-root-dir",
         str(root_dir),
     ]
     if epochs is not None:
