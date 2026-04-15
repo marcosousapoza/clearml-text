@@ -2,24 +2,32 @@ from dataclasses import dataclass
 from functools import partial
 import multiprocessing as mp
 import os
+from pathlib import Path
 import subprocess
 import sys
 from typing import Any
 
+from data.cache import get_cache_root
 from task import TASK_SPECS
+
+
+TRAIN_ALL_SEEDS = (0, 1, 2, 3, 4, 5)
 
 
 @dataclass(frozen=True)
 class TrainingJob:
     dataset: str
     task: str
+    seed: int
     command: list[str]
+    log_dir: Path
 
 
 @dataclass(frozen=True)
 class TrainingResult:
     dataset: str
     task: str
+    seed: int
     return_code: int
 
 
@@ -29,33 +37,58 @@ def main(argv: list[str] | None = None) -> None:
 
     argv = sys.argv[1:] if argv is None else argv
     parser = argparse.ArgumentParser(description="Train all registered tasks with PyTorch Lightning.")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed passed to each training subprocess.")
+    parser.add_argument(
+        "--dataset",
+        action="append",
+        default=[],
+        help="Dataset name to train. Repeat to select multiple datasets. Defaults to all datasets.",
+    )
+    parser.add_argument("--flatten", action="store_true", help="Flatten databases to each task's object types.")
+    parser.add_argument("--accelerator", type=str, default=None, help="Accelerator override (e.g. cpu, gpu). Defaults to gpu if available, else cpu.")
+    parser.add_argument("--epochs", type=int, default=None, help="Number of training epochs. Defaults to the scripts.lightning default.")
     args = parser.parse_args(argv)
 
     gpu_count = torch.cuda.device_count()
     gpu_ids = _visible_gpu_ids(gpu_count)
     parallelism = len(gpu_ids) if gpu_ids else 1
-    accelerator = "gpu" if gpu_ids else "cpu"
-    jobs = _build_jobs(accelerator, args.seed)
+    accelerator = args.accelerator or ("gpu" if gpu_ids else "cpu")
+    if accelerator == "cpu":
+        gpu_ids = []
+    jobs = _build_jobs(accelerator, set(args.dataset), args.flatten, args.epochs)
 
     failures = _run_jobs(jobs, gpu_ids, parallelism)
     if failures:
         print("Failed tasks:")
-        for dataset, task, return_code in failures:
-            print(f"  {dataset}/{task}: exit code {return_code}")
+        for dataset, task, seed, return_code in failures:
+            print(f"  {dataset}/{task} seed={seed}: exit code {return_code}")
         raise SystemExit(1)
 
 
-def _build_jobs(accelerator: str, seed: int) -> list[TrainingJob]:
+def _build_jobs(accelerator: str, datasets: set[str], flatten: bool, epochs: int | None = None) -> list[TrainingJob]:
     jobs = []
-    for dataset, task, _task_cls in TASK_SPECS:
-        jobs.append(
-            TrainingJob(
-                dataset=dataset,
-                task=task,
-                command=_build_command(dataset, task, accelerator, seed),
-            )
+    available_datasets = {dataset for dataset, _task, _task_cls in TASK_SPECS}
+    unknown_datasets = datasets - available_datasets
+    if unknown_datasets:
+        raise ValueError(
+            "Unknown dataset(s): "
+            f"{', '.join(sorted(unknown_datasets))}. "
+            f"Available datasets: {', '.join(sorted(available_datasets))}."
         )
+
+    for dataset, task, _task_cls in TASK_SPECS:
+        if datasets and dataset not in datasets:
+            continue
+        for seed in TRAIN_ALL_SEEDS:
+            command, log_dir = _build_command(dataset, task, accelerator, seed, flatten, epochs)
+            jobs.append(
+                TrainingJob(
+                    dataset=dataset,
+                    task=task,
+                    seed=seed,
+                    command=command,
+                    log_dir=log_dir,
+                )
+            )
     return jobs
 
 
@@ -63,7 +96,7 @@ def _run_jobs(
     jobs: list[TrainingJob],
     gpu_ids: list[str],
     parallelism: int,
-) -> list[tuple[str, str, int]]:
+) -> list[tuple[str, str, int, int]]:
     ctx = mp.get_context("spawn")
     with ctx.Manager() as manager:
         gpu_queue = manager.Queue()
@@ -75,7 +108,7 @@ def _run_jobs(
         with ctx.Pool(processes=parallelism) as pool:
             for result in pool.imap_unordered(worker, jobs, chunksize=1):
                 if result.return_code != 0:
-                    failures.append((result.dataset, result.task, result.return_code))
+                    failures.append((result.dataset, result.task, result.seed, result.return_code))
         return failures
 
 
@@ -85,9 +118,12 @@ def _run_job(job: TrainingJob, gpu_queue: Any) -> TrainingResult:
         env = os.environ.copy()
         if gpu_id is not None:
             env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-        print(_display_command(job.command, gpu_id), flush=True)
-        completed = subprocess.run(job.command, env=env, check=False)
-        return TrainingResult(job.dataset, job.task, completed.returncode)
+        job.log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = job.log_dir / "train.log"
+        print(_display_command(job.command, gpu_id), f"  -> {log_path}", flush=True)
+        with open(log_path, "w") as log_file:
+            completed = subprocess.run(job.command, env=env, check=False, stdout=log_file, stderr=log_file)
+        return TrainingResult(job.dataset, job.task, job.seed, completed.returncode)
     finally:
         gpu_queue.put(gpu_id)
 
@@ -97,7 +133,11 @@ def _build_command(
     task: str,
     accelerator: str,
     seed: int,
-) -> list[str]:
+    flatten: bool,
+    epochs: int | None = None,
+) -> tuple[list[str], Path]:
+    run_name = f"{dataset}_{task}{'_flat' if flatten else ''}"
+    root_dir = get_cache_root() / run_name / "lightning" / f"seed_{seed}"
     command = [
         sys.executable,
         "-m",
@@ -110,10 +150,16 @@ def _build_command(
         accelerator,
         "--seed",
         str(seed),
+        "--default_root_dir",
+        str(root_dir),
     ]
+    if epochs is not None:
+        command.extend(["--epochs", str(epochs)])
+    if flatten:
+        command.append("--flatten")
     if accelerator == "gpu":
         command.extend(["--devices", "1"])
-    return command
+    return command, root_dir
 
 
 def _display_command(command: list[str], gpu_id: str | None) -> str:

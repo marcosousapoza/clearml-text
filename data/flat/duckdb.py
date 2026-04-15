@@ -62,28 +62,45 @@ def _order_by(columns: list[str], *, alias: str, id_col: str) -> str:
     return ", ".join(order_cols)
 
 
+def _normalize_object_types(object_types: str | tuple[str, ...]) -> tuple[str, ...]:
+    if isinstance(object_types, str):
+        normalized = (object_types,)
+    else:
+        normalized = tuple(dict.fromkeys(object_types))
+    if not normalized:
+        raise ValueError("At least one object type is required for flattening.")
+    return normalized
+
+
 @check_dbs
-def flatten(db: Database, object_type: str) -> Database:
+def flatten(db: Database, object_type: str | tuple[str, ...]) -> Database:
     """
-    Flatten an OCEL-style RelBench database with respect to a single object type.
+    Flatten an OCEL-style RelBench database with respect to object type(s).
 
     The transform is executed in DuckDB and performs two operations:
-    1. Remove all objects that are not of the requested type.
+    1. Remove all objects that are not of the requested type(s).
     2. Duplicate events so each flattened event is associated with at most one object.
 
     Flattened event identifiers are deterministic composite ids of the form
     `<original_event_id>::<object_id>::<ordinal>`.
     """
+    object_types = _normalize_object_types(object_type)
     object_df = db.table_dict[OBJECT_TABLE].df
     if OBJECT_TYPE_COL not in object_df.columns:
         raise ValueError(f"{OBJECT_TABLE!r} missing required column {OBJECT_TYPE_COL!r}.")
-    if object_type not in set(object_df[OBJECT_TYPE_COL].astype(str)):
-        raise ValueError(f"Unknown object type {object_type!r}.")
+    known_object_types = set(object_df[OBJECT_TYPE_COL].astype(str))
+    unknown_object_types = [
+        object_type for object_type in object_types if object_type not in known_object_types
+    ]
+    if unknown_object_types:
+        formatted_object_types = ", ".join(repr(object_type) for object_type in unknown_object_types)
+        raise ValueError(f"Unknown object type(s): {formatted_object_types}.")
 
     con = duckdb.connect()
     try:
         for name, table in db.table_dict.items():
             con.register(name, table.df)
+        con.register("target_object_type", pd.DataFrame({OBJECT_TYPE_COL: object_types}))
 
         e2o_order_expr = (
             f"COALESCE(CAST(e2o.{_quote(QUALIFIER_COL)} AS VARCHAR), '')"
@@ -94,11 +111,11 @@ def flatten(db: Database, object_type: str) -> Database:
         con.execute(
             f"""
             CREATE TEMP TABLE target_object AS
-            SELECT *
-            FROM {OBJECT_TABLE}
-            WHERE {_quote(OBJECT_TYPE_COL)} = ?
-            """,
-            [object_type],
+            SELECT obj.*
+            FROM {OBJECT_TABLE} AS obj
+            INNER JOIN target_object_type AS target_type
+                ON CAST(obj.{_quote(OBJECT_TYPE_COL)} AS VARCHAR) = target_type.{_quote(OBJECT_TYPE_COL)}
+            """
         )
         con.execute(
             f"""
@@ -204,7 +221,7 @@ def flatten(db: Database, object_type: str) -> Database:
                     SELECT
                         map.{_quote(EVENT_ID_COL)} AS {_quote(EVENT_ID_COL)}
                         {", " if attr_passthrough else ""}{attr_passthrough}
-                    FROM {name} AS attr
+                    FROM {_quote(name)} AS attr
                     INNER JOIN flat_event_map AS map
                         ON map.original_event_id = attr.{_quote(EVENT_ID_COL)}
                     ORDER BY {_order_by(attr_cols, alias="attr", id_col=EVENT_ID_COL)}, map.{_quote(EVENT_ID_COL)}
@@ -215,11 +232,14 @@ def flatten(db: Database, object_type: str) -> Database:
                     flat_attr,
                     fkey_col_to_pkey_table={EVENT_ID_COL: EVENT_TABLE},
                 )
-            elif name == f"{OBJECT_ATTR_TABLE_PREFIX}{object_type}":
+            elif (
+                name.startswith(OBJECT_ATTR_TABLE_PREFIX)
+                and name.removeprefix(OBJECT_ATTR_TABLE_PREFIX) in object_types
+            ):
                 flat_attr = con.execute(
                     f"""
                     SELECT attr.*
-                    FROM {name} AS attr
+                    FROM {_quote(name)} AS attr
                     INNER JOIN target_object AS obj
                         ON obj.{_quote(OBJECT_ID_COL)} = attr.{_quote(OBJECT_ID_COL)}
                     """

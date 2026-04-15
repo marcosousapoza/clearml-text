@@ -1,20 +1,17 @@
-import duckdb
 import pandas as pd
 from relbench.base import Database
 
 from data.const import (
-    E2O_TABLE,
     EVENT_ID_COL,
-    EVENT_TABLE,
     EVENT_TYPE_COL,
     OBJECT_ID_COL,
-    OBJECT_TABLE,
     OBJECT_TYPE_COL,
     O2O_DST_COL,
     O2O_SRC_COL,
     TIME_COL,
 )
 from data.wrapper import check_dbs
+from .db_utils import ocel_connection
 
 
 @check_dbs
@@ -25,18 +22,18 @@ def build_event_within_table(
     times: pd.Series,
     delta: pd.Timedelta,
 ) -> pd.DataFrame:
-    event = db.table_dict[EVENT_TABLE].df
-    obj = db.table_dict[OBJECT_TABLE].df
-    e2o = db.table_dict[E2O_TABLE].df
-    times_df = pd.DataFrame({"obs_time": pd.to_datetime(times).sort_values().unique()})
+    """Binary label: does a specific event type occur within a future window?
+
+    For each (object, observation_time) pair, assigns 1 if the target event
+    type occurs within `delta` seconds of that observation, 0 otherwise.
+    Only includes objects that have not yet experienced the target event at
+    observation time — once an object has done it, it is no longer a candidate.
+    """
+    # Deduplicate and sort observation times so DuckDB processes fewer rows.
+    times_sorted = pd.to_datetime(times).sort_values().unique()
     future_window = f"{int(delta.total_seconds())} seconds"
 
-    con = duckdb.connect()
-    con.register("event", event)
-    con.register("obj", obj)
-    con.register("e2o", e2o)
-    con.register("times_df", times_df)
-    try:
+    with ocel_connection(db, times_sorted) as con:
         return con.execute(
             f"""
             WITH typed_objects AS (
@@ -98,8 +95,6 @@ def build_event_within_table(
             ORDER BY {TIME_COL}, {OBJECT_ID_COL}
             """
         ).df()
-    finally:
-        con.close()
 
 
 @check_dbs
@@ -110,18 +105,16 @@ def build_pair_event_within_table(
     times: pd.Series,
     delta: pd.Timedelta,
 ) -> pd.DataFrame:
-    event = db.table_dict[EVENT_TABLE].df
-    obj = db.table_dict[OBJECT_TABLE].df
-    e2o = db.table_dict[E2O_TABLE].df
-    times_df = pd.DataFrame({"obs_time": pd.to_datetime(times).sort_values().unique()})
+    """Binary label for observed object pairs: does an event occur within a window?
+
+    Finds all (src_object, dst_object) pairs that have co-appeared in at least
+    one event, then labels each pair at each observation time based on whether
+    the target event type occurs for that pair within `delta` seconds.
+    """
+    times_sorted = pd.to_datetime(times).sort_values().unique()
     future_window = f"{int(delta.total_seconds())} seconds"
 
-    con = duckdb.connect()
-    con.register("event", event)
-    con.register("obj", obj)
-    con.register("e2o", e2o)
-    con.register("times_df", times_df)
-    try:
+    with ocel_connection(db, times_sorted) as con:
         return con.execute(
             f"""
             WITH linked AS (
@@ -199,8 +192,6 @@ def build_pair_event_within_table(
             ORDER BY {TIME_COL}, {O2O_SRC_COL}, {O2O_DST_COL}
             """
         ).df()
-    finally:
-        con.close()
 
 
 @check_dbs
@@ -211,18 +202,17 @@ def build_complete_pair_event_within_table(
     times: pd.Series,
     delta: pd.Timedelta,
 ) -> pd.DataFrame:
-    event = db.table_dict[EVENT_TABLE].df
-    obj = db.table_dict[OBJECT_TABLE].df
-    e2o = db.table_dict[E2O_TABLE].df
-    times_df = pd.DataFrame({"obs_time": pd.to_datetime(times).sort_values().unique()})
+    """Binary label for all possible object pairs: does an event occur within a window?
+
+    Unlike build_pair_event_within_table, this creates a full cartesian product
+    of src × dst objects (not just pairs that have co-appeared). Useful when
+    you want to predict whether any two objects will be linked in the future,
+    even if they have never shared an event before.
+    """
+    times_sorted = pd.to_datetime(times).sort_values().unique()
     future_window = f"{int(delta.total_seconds())} seconds"
 
-    con = duckdb.connect()
-    con.register("event", event)
-    con.register("obj", obj)
-    con.register("e2o", e2o)
-    con.register("times_df", times_df)
-    try:
+    with ocel_connection(db, times_sorted) as con:
         return con.execute(
             f"""
             WITH src_objects AS (
@@ -287,5 +277,3 @@ def build_complete_pair_event_within_table(
             ORDER BY {TIME_COL}, {O2O_SRC_COL}, {O2O_DST_COL}
             """
         ).df()
-    finally:
-        con.close()

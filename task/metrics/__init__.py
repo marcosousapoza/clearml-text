@@ -1,8 +1,44 @@
 import numpy as np
 import sklearn.metrics as skm
+from numpy.typing import NDArray
+
+
+# roc_auc: weighted per-class OvR, used as a metric callable in task `metrics` lists.
+# multiclass_roc_auc: macro OvR with softmax normalization, for external callers.
+
+
+def roc_auc(target: NDArray, pred: NDArray) -> float:
+    """Weighted per-class one-vs-rest ROC AUC for multiclass predictions.
+
+    Skips classes with no positives or no negatives (they have no meaningful
+    AUC), then returns a weighted average across remaining classes.
+    """
+    if pred.ndim <= 1 or pred.shape[1] <= 1:
+        raise ValueError("multiclass ROC AUC requires class prediction scores.")
+
+    target = target.astype(np.int64, copy=False)
+    scores: list[float] = []
+    weights: list[int] = []
+    for label in range(pred.shape[1]):
+        binary_target = target == label
+        positives = int(binary_target.sum())
+        negatives = len(binary_target) - positives
+        if positives == 0 or negatives == 0:
+            continue
+        scores.append(float(skm.roc_auc_score(binary_target, pred[:, label])))
+        weights.append(positives)
+
+    if not scores:
+        return float("nan")
+    return float(np.average(scores, weights=weights))
 
 
 def multiclass_roc_auc(true: np.ndarray, pred: np.ndarray) -> float:
+    """Macro one-vs-rest ROC AUC with softmax normalization.
+
+    Converts raw logits to probabilities before scoring. Returns nan when
+    fewer than two classes are present in the ground truth.
+    """
     if pred.ndim <= 1 or pred.shape[1] <= 1:
         raise ValueError("multiclass_roc_auc requires class prediction scores.")
     shifted = pred - pred.max(axis=1, keepdims=True)
@@ -31,6 +67,7 @@ def multiclass_roc_auc(true: np.ndarray, pred: np.ndarray) -> float:
 
 
 def multiclass_log_loss(true: np.ndarray, pred: np.ndarray) -> float:
+    """Cross-entropy loss for multiclass predictions, given raw logits."""
     if pred.ndim <= 1 or pred.shape[1] <= 1:
         raise ValueError("multiclass_log_loss requires class prediction scores.")
     shifted = pred - pred.max(axis=1, keepdims=True)

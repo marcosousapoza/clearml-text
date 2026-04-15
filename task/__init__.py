@@ -6,7 +6,7 @@ from relbench.base import BaseTask
 from relbench.tasks import get_task, register_task
 
 from .bpi2017 import (
-    CaseRNextEvent,
+    ApplicationNextEvent,
     CaseRNextTime,
     CaseRRemainingTime,
     OfferCancelledWithin30Days,
@@ -32,7 +32,7 @@ from .order_management import (
 
 
 TASK_SPECS = (
-    ("bpi2017", "next_event_cases", CaseRNextEvent),
+    ("bpi2017", "next_event_cases", ApplicationNextEvent),
     ("bpi2017", "next_time_cases", CaseRNextTime),
     ("bpi2017", "remaining_time_cases", CaseRRemainingTime),
     ("bpi2017", "event_within", OfferCancelledWithin30Days),

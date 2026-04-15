@@ -123,6 +123,22 @@ def apply_default_column_dtypes_to_df(df: pd.DataFrame, time_col: str | None = N
     return out
 
 
+def _safe_attr_table_suffix(name: str) -> str:
+    suffix = str(name).replace(".", "_")
+    return suffix or "unknown"
+
+
+def _safe_attr_table_name(prefix: str, name: str, used_names: set[str]) -> str:
+    base = f"{prefix}{_safe_attr_table_suffix(name)}"
+    table_name = base
+    counter = 2
+    while table_name in used_names:
+        table_name = f"{base}_{counter}"
+        counter += 1
+    used_names.add(table_name)
+    return table_name
+
+
 @check_dbs
 def apply_default_column_dtypes(db: Database) -> Database:
     return Database(table_dict={
@@ -257,10 +273,13 @@ def tables_to_relbench_database(event: pd.DataFrame, object: pd.DataFrame, e2o: 
         o2o_df = _join_time(o2o_df, object_df, left_on=O2O_DST_COL, right_on=OBJECT_ID_COL, table_name=O2O_TABLE).rename(columns={TIME_COL: "_dst_time"})
         o2o_df[TIME_COL] = o2o_df[["_src_time", "_dst_time"]].max(axis=1)
         tables[O2O_TABLE] = Table(o2o_df.drop(columns=["_src_time", "_dst_time"]), {O2O_SRC_COL: OBJECT_TABLE, O2O_DST_COL: OBJECT_TABLE}, time_col=TIME_COL)
+    used_table_names = set(tables)
     for name, df in event_attr.items():
         if set(df.columns) != {EVENT_ID_COL}:
-            tables[f"{EVENT_ATTR_TABLE_PREFIX}{name}"] = Table(_join_time(df, event_df, left_on=EVENT_ID_COL, right_on=EVENT_ID_COL, table_name=name), {EVENT_ID_COL: EVENT_TABLE}, time_col=TIME_COL)
+            table_name = _safe_attr_table_name(EVENT_ATTR_TABLE_PREFIX, name, used_table_names)
+            tables[table_name] = Table(_join_time(df, event_df, left_on=EVENT_ID_COL, right_on=EVENT_ID_COL, table_name=name), {EVENT_ID_COL: EVENT_TABLE}, time_col=TIME_COL)
     for name, df in object_attr.items():
         if set(df.columns) != {OBJECT_ID_COL, TIME_COL}:
-            tables[f"{OBJECT_ATTR_TABLE_PREFIX}{name}"] = Table(df, {OBJECT_ID_COL: OBJECT_TABLE}, time_col=TIME_COL)
+            table_name = _safe_attr_table_name(OBJECT_ATTR_TABLE_PREFIX, name, used_table_names)
+            tables[table_name] = Table(df, {OBJECT_ID_COL: OBJECT_TABLE}, time_col=TIME_COL)
     return apply_default_column_dtypes(Database(table_dict=tables))

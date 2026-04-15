@@ -5,6 +5,14 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 
 class TargetTransform(BaseEstimator, TransformerMixin):
+    """Identity transform — a no-op base class for target normalization.
+
+    Wire in a subclass by overriding make_target_transform() on a task:
+      - ZScoreTargetTransform: standardizes to zero mean and unit variance
+      - Log1pZScoreTargetTransform: log1p first, then Z-score; good for
+        skewed regression targets like time durations
+    """
+
     def fit(self, target: torch.Tensor, y=None):
         return self
 

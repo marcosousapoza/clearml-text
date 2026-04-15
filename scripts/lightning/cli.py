@@ -1,7 +1,6 @@
 import argparse
 from pathlib import Path
 
-import lightning as L
 import torch
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
@@ -34,12 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--precision", type=str, default="32-true")
     parser.add_argument("--default_root_dir", type=str, default=None)
     parser.add_argument("--num_sanity_val_steps", type=int, default=0)
-    parser.add_argument(
-        "--ckpt_path",
-        type=str,
-        default=None,
-        help="Path to a saved Lightning checkpoint to test without training.",
-    )
+    parser.add_argument("--flatten", action="store_true")
+    parser.add_argument("--ckpt_path", type=str, default=None)
     parser.add_argument("--fast_dev_run", action="store_true")
     return parser
 
@@ -61,45 +56,41 @@ def main(argv: list[str] | None = None) -> None:
         temporal_strategy=args.temporal_strategy,
         num_workers=args.num_workers,
         cache_dir=args.cache_dir,
+        flatten=args.flatten,
     )
     datamodule.setup("fit")
     assert datamodule.artifacts is not None
 
     module = EntityGNNLightningModule(
+        num_layers=args.num_layers,
+        channels=args.channels,
+        aggr=args.aggr,
+        lr=args.lr,
+        epochs=args.epochs,
         task=datamodule.artifacts.task,
         data=datamodule.artifacts.data,
         col_stats_dict=datamodule.artifacts.col_stats_dict,
         split_inputs=datamodule.artifacts.split_inputs,
         task_node_type=datamodule.artifacts.task_node_type,
         target_transform=datamodule.artifacts.target_transform,
-        num_layers=args.num_layers,
-        channels=args.channels,
-        aggr=args.aggr,
-        lr=args.lr,
-        epochs=args.epochs,
     )
 
+    run_name = f"{args.dataset}_{args.task}{'_flat' if args.flatten else ''}"
     root_dir = Path(args.default_root_dir) if args.default_root_dir else (
-        datamodule.artifacts.cache_root / f"{args.dataset}_{args.task}" / "lightning"
+        datamodule.artifacts.cache_root / run_name / "lightning"
     )
-    checkpoint_dir = root_dir / "checkpoints"
-    csv_logger = CSVLogger(save_dir=str(root_dir), name="logs")
-    wandb_logger = WandbLogger(
-        project="ocel-ocp",
-        name=f"{args.dataset}_{args.task}",
-        config=vars(args),
-        save_dir=str(root_dir),
-    )
-    loggers = [csv_logger, wandb_logger]
+    loggers = [
+        CSVLogger(save_dir=str(root_dir), name="logs"),
+        WandbLogger(project="ocel-ocp", name=run_name, config=vars(args), save_dir=str(root_dir)),
+    ]
     checkpoint_callback = ModelCheckpoint(
-        dirpath=str(checkpoint_dir),
+        dirpath=str(root_dir / "checkpoints"),
         filename="epoch={epoch:02d}-{" + module.checkpoint_monitor.replace("/", "_") + ":.4f}",
         monitor=module.checkpoint_monitor,
         mode=module.checkpoint_mode,
         save_top_k=1,
         save_last=True,
     )
-
     trainer = Trainer(
         accelerator=args.accelerator,
         devices=args.devices,

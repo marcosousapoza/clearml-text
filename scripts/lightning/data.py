@@ -7,6 +7,7 @@ from torch_geometric.loader import NeighborLoader
 from torch_frame.config.text_embedder import TextEmbedderConfig
 
 from data.dataset  import register_all_datasets
+from data.flat import flatten as flatten_db
 from task import register_tasks
 import torch
 from data.cache import configure_cache_environment
@@ -43,6 +44,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         temporal_strategy: str,
         num_workers: int,
         cache_dir: str | None = None,
+        flatten: bool = False,
     ) -> None:
         super().__init__()
         self.dataset_name = dataset_name
@@ -53,6 +55,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         self.temporal_strategy = temporal_strategy
         self.num_workers = num_workers
         self.cache_dir = cache_dir
+        self.flatten = flatten
 
         self.artifacts: DataArtifacts | None = None
         self._loader_dict: dict[str, NeighborLoader] = {}
@@ -68,6 +71,8 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         dataset: Dataset = get_dataset(self.dataset_name, download=False)
         task: MEntityTask = get_task(self.dataset_name, self.task_name, download=False)  # type: ignore[assignment]
         db = dataset.get_db()
+        if self.flatten:
+            db = flatten_db(db, task.object_types)
 
         col_to_stype_dict = get_stype_proposal(db)
         col_to_stype_dict = {
@@ -83,6 +88,9 @@ class RelbenchLightningDataModule(L.LightningDataModule):
             col_to_stype_dict = dataset.set_stype(col_to_stype_dict)  # type: ignore[attr-defined]
 
         db, split_inputs, target_transform = add_task_to_database(db, task, self.task_name, col_to_stype_dict)
+        if self.flatten:
+            db.reindex_pkeys_and_fkeys()
+        graph_cache_name = f"{self.dataset_name}_{self.task_name}{'_flat' if self.flatten else ''}"
         data, col_stats_dict = make_pkey_fkey_graph(
             db,
             col_to_stype_dict=col_to_stype_dict,
@@ -91,7 +99,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
                     device=torch.device('cpu') # cuda lead to weird warnings
                 ), batch_size=256,
             ),
-            cache_dir=str(cache_root / f"{self.dataset_name}_{self.task_name}" / "materialized"),
+            cache_dir=str(cache_root / graph_cache_name / "materialized"),
         )
 
         task_node_type = f"{self.task_name}_labels"
