@@ -1,6 +1,7 @@
 from relbench.base.table import Table
 
 from .datareader.relbench_tables import apply_default_column_dtypes_to_df
+from .semantic import TRAINING_PARTITION_RENAME_DICTIONARY
 
 
 _ORIGINAL_TABLE_LOAD = Table.load.__func__
@@ -14,3 +15,8 @@ def _normalized_table_load(cls, path):
 
 
 Table.load = _normalized_table_load # type: ignore
+
+
+__all__ = [
+    "TRAINING_PARTITION_RENAME_DICTIONARY",
+]

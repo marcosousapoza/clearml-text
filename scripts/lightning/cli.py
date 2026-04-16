@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 from lightning.pytorch import Trainer
-from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
+from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger, WandbLogger, Logger
 from torch_geometric.seed import seed_everything
 
@@ -114,7 +114,16 @@ def main(argv: list[str] | None = None) -> None:
         num_sanity_val_steps=args.num_sanity_val_steps,
         default_root_dir=str(root_dir),
         logger=loggers,
-        callbacks=[checkpoint_callback, LearningRateMonitor(logging_interval="epoch")],
+        callbacks=[
+            checkpoint_callback,
+            LearningRateMonitor(logging_interval="epoch"),
+            EarlyStopping(
+                monitor=module.checkpoint_monitor,
+                mode=module.checkpoint_mode,
+                patience=10,
+                min_delta=0.0,
+            ),
+        ],
         fast_dev_run=args.fast_dev_run,
         inference_mode=False,
         log_every_n_steps=1,

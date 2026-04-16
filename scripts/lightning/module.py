@@ -5,7 +5,7 @@ from lightning.pytorch.utilities.types import OptimizerLRScheduler
 from relbench.base import TaskType
 from torch import Tensor
 from torch.optim import Adam
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from scripts.model import Model
 from task.utils import MEntityTask
@@ -163,11 +163,18 @@ class EntityGNNLightningModule(LightningModule):
 
     def configure_optimizers(self) -> OptimizerLRScheduler:
         optimizer = Adam(self.parameters(), lr=self.lr)
-        scheduler = CosineAnnealingLR(optimizer, T_max=self.epochs)
+        scheduler = ReduceLROnPlateau(
+            optimizer,
+            mode=self.checkpoint_mode,  # type: ignore[arg-type]
+            factor=0.5,
+            patience=5,
+            min_lr=1e-6,
+        )
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
+                "monitor": self.checkpoint_monitor,
                 "interval": "epoch",
                 "frequency": 1,
             },

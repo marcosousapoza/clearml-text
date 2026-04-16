@@ -14,6 +14,7 @@ from ._utils import (
     unzip_file,
 )
 from ..datareader.relbench_tables import apply_default_column_dtypes
+from ..semantic import TRAINING_PARTITION_RENAME_DICTIONARY
 from ..wrapper import check_dbs
 
 
@@ -43,6 +44,12 @@ def _drop_attr_columns(db: Database, columns: set[str]) -> Database:
 
 class OCELDataset(Dataset):
     """Base dataset that owns its stype post-processing."""
+
+    semantic_rename_dictionary: dict[str, object] = {}
+
+    @classmethod
+    def get_semantic_rename_dictionary(cls) -> dict[str, object]:
+        return cls.semantic_rename_dictionary
 
     def set_stype(
         self,
@@ -141,6 +148,7 @@ class ContainerLogisticsDataset(OCELDataset):
     )
     _file_format = "json"
     _drop_attr_cols = {"Weight"}
+    semantic_rename_dictionary = TRAINING_PARTITION_RENAME_DICTIONARY["container_logistics"]
 
     def make_db(self) -> Database:
         db = parse_ocel_to_database(
@@ -228,6 +236,7 @@ class OrderManagementDataset(OCELDataset):
 
     _uri = "https://zenodo.org/records/8428112/files/order-management.json?download=1"
     _file_format = "json"
+    semantic_rename_dictionary = TRAINING_PARTITION_RENAME_DICTIONARY["order_management"]
 
     def make_db(self) -> Database:
         return parse_ocel_to_database(
@@ -319,6 +328,7 @@ class BPI2019(OCELDataset):
 
     _uri = "https://data.4tu.nl/file/46a7e15b-10c7-4ab2-988d-ee67d8ea515a/ae11f6ca-2824-407d-98ea-ec8bc456e714"
     _file_format = "json"
+    semantic_rename_dictionary = TRAINING_PARTITION_RENAME_DICTIONARY["bpi2019"]
     _event_attr_stypes: dict[str, stype] = {
         "cCompany": stype.categorical,
         "cDocType": stype.categorical,
@@ -413,6 +423,7 @@ class BPI2017(OCELDataset):
 
     _uri = "https://data.4tu.nl/file/6889ca3f-97cf-459a-b630-3b0b0d8664b5/5d5b9f89-7fa6-4c92-b6ac-04f854bdf92e"
     _file_format = "json"
+    semantic_rename_dictionary = TRAINING_PARTITION_RENAME_DICTIONARY["bpi2017"]
     _event_attr_stypes: dict[str, stype] = {
         "ApplicationType": stype.categorical,
         "LoanGoal": stype.categorical,
