@@ -1,6 +1,7 @@
 from typing import Any, Dict, List
 
 import torch
+import torch_geometric
 from torch import Tensor
 from torch.nn import Embedding, ModuleDict, ModuleList
 from torch_frame.data.stats import StatType
@@ -10,6 +11,10 @@ from torch_geometric.nn.norm import LayerNorm
 from torch_geometric.typing import EdgeType, NodeType
 
 from relbench.modeling.nn import HeteroEncoder, HeteroGraphSAGE, HeteroTemporalEncoder
+
+# HGTConv's HeteroLinear uses a grouped GEMM kernel (segment_matmul) that
+# crashes on some GPU/driver combinations. Force the naive per-type matmul path.
+torch_geometric.backend.use_segment_matmul = False
 
 
 class HeteroHGT(torch.nn.Module):
