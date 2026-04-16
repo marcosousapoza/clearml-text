@@ -7,10 +7,10 @@ from sentence_transformers import SentenceTransformer
 from torch import Tensor
 
 
-class GloveTextEmbedding:
+class SentenceTextEmbedding:
     def __init__(self, device: Optional[torch.device] = None):
         self.model = SentenceTransformer(
-            "sentence-transformers/average_word_embeddings_glove.6B.300d",
+            "sentence-transformers/all-MiniLM-L6-v2",
             device=device.type if device else 'cpu',
         )
 

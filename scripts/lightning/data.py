@@ -16,9 +16,27 @@ from relbench.datasets import get_dataset
 from data.graph import make_ocel_graph
 from relbench.modeling.utils import get_stype_proposal
 from relbench.tasks import get_task
-from scripts.text_embedder import GloveTextEmbedding
+from scripts.text_embedder import SentenceTextEmbedding
 from task.utils import MEntityTask, add_task_to_database
 from task.utils.transform import TargetTransform
+
+
+def _build_num_neighbors(num_neighbors_base: int, num_layers: int) -> list[int]:
+    """Build the per-hop neighbor count list for NeighborLoader.
+
+    The first hop (seed label node → entity object) is 1-to-1, so we use -1
+    (sample all).  Subsequent hops start at *num_neighbors_base* and decay
+    geometrically with ratio ~0.63 (gentler than halving at 0.5).
+
+    Example for num_layers=4, num_neighbors_base=32:
+        [-1, 32, 20, 13]
+    """
+    decay = 0.63
+    hops = [-1] + [
+        max(1, round(num_neighbors_base * (decay ** i)))
+        for i in range(num_layers - 1)
+    ]
+    return hops
 
 
 @dataclass
@@ -95,7 +113,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
             db,
             col_to_stype_dict=col_to_stype_dict,
             text_embedder_cfg=TextEmbedderConfig(
-                text_embedder=GloveTextEmbedding(
+                text_embedder=SentenceTextEmbedding(
                     device=torch.device('cpu') # cuda lead to weird warnings
                 ), batch_size=256,
             ),
@@ -103,7 +121,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         )
 
         task_node_type = f"{self.task_name}_labels"
-        num_neighbors = [int(self.num_neighbors / 2**i) for i in range(self.num_layers)]
+        num_neighbors = _build_num_neighbors(self.num_neighbors, self.num_layers)
         self._loader_dict = {}
         for split in ["train", "val", "test"]:
             table_input = split_inputs[split]
@@ -116,6 +134,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
                 transform=table_input.transform,
                 batch_size=self.batch_size,
                 temporal_strategy=self.temporal_strategy,
+                disjoint=True,
                 shuffle=split == "train",
                 num_workers=self.num_workers,
                 persistent_workers=self.num_workers > 0,

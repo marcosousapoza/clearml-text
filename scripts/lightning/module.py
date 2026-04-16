@@ -23,6 +23,8 @@ class EntityGNNLightningModule(LightningModule):
         num_layers: int,
         channels: int,
         aggr: str,
+        gnn_type: str = "sage",
+        hgt_heads: int = 4,
         lr: float,
         epochs: int,
         # Artifact args — provided directly (HPO / old CLI) or via configure_from_artifacts() (LightningCLI)
@@ -77,6 +79,8 @@ class EntityGNNLightningModule(LightningModule):
             out_channels=task_setup.out_channels,
             aggr=hparams["aggr"],
             norm="batch_norm",
+            gnn_type=hparams["gnn_type"],
+            hgt_heads=hparams["hgt_heads"],
         )
 
         self.val_metric = RelbenchEvalMetric(task, "val", task_setup, target_transform)

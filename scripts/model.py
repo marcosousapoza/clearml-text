@@ -2,13 +2,67 @@ from typing import Any, Dict, List
 
 import torch
 from torch import Tensor
-from torch.nn import Embedding, ModuleDict
+from torch.nn import Embedding, ModuleDict, ModuleList
 from torch_frame.data.stats import StatType
 from torch_geometric.data import HeteroData
-from torch_geometric.nn import MLP
-from torch_geometric.typing import NodeType
+from torch_geometric.nn import HGTConv, MLP
+from torch_geometric.nn.norm import LayerNorm
+from torch_geometric.typing import EdgeType, NodeType
 
 from relbench.modeling.nn import HeteroEncoder, HeteroGraphSAGE, HeteroTemporalEncoder
+
+
+class HeteroHGT(torch.nn.Module):
+    """Multi-layer HGT (Heterogeneous Graph Transformer) backbone.
+
+    Wraps :class:`torch_geometric.nn.HGTConv` with per-layer LayerNorm and
+    ReLU, matching the interface of :class:`relbench.modeling.nn.HeteroGraphSAGE`.
+    The ``**kwargs`` in ``forward`` absorb ``num_sampled_nodes_dict`` /
+    ``num_sampled_edges_dict`` passed by the mini-batch loop (HGTConv does not
+    use them).
+    """
+
+    def __init__(
+        self,
+        node_types: List[NodeType],
+        edge_types: List[EdgeType],
+        channels: int,
+        heads: int = 4,
+        num_layers: int = 4,
+    ):
+        super().__init__()
+        metadata = (node_types, edge_types)
+        self.convs = ModuleList([
+            HGTConv(channels, channels, metadata, heads=heads)
+            for _ in range(num_layers)
+        ])
+        self.norms = ModuleList([
+            ModuleDict({nt: LayerNorm(channels, mode="node") for nt in node_types})
+            for _ in range(num_layers)
+        ])
+
+    def reset_parameters(self):
+        for conv in self.convs:
+            conv.reset_parameters()
+        for norm_dict in self.norms:
+            for norm in norm_dict.values():
+                norm.reset_parameters()
+
+    def forward(
+        self,
+        x_dict: Dict[NodeType, Tensor],
+        edge_index_dict: Dict[EdgeType, Tensor],
+        **kwargs,  # absorbs num_sampled_nodes_dict / num_sampled_edges_dict
+    ) -> Dict[NodeType, Tensor]:
+        for conv, norm_dict in zip(self.convs, self.norms):
+            out = conv(x_dict, edge_index_dict)
+            x_dict = {
+                nt: norm_dict[nt](
+                    out[nt] if (out.get(nt) is not None) else x_dict[nt]
+                ).relu()
+                for nt in x_dict
+            }
+        return x_dict
 
 
 class Model(torch.nn.Module):
@@ -22,6 +76,8 @@ class Model(torch.nn.Module):
         out_channels: int,
         aggr: str,
         norm: str,
+        gnn_type: str = "sage",
+        hgt_heads: int = 4,
         # List of node types to add shallow embeddings to input
         shallow_list: List[NodeType] | None = None,
         # ID awareness
@@ -44,13 +100,24 @@ class Model(torch.nn.Module):
             ],
             channels=channels,
         )
-        self.gnn = HeteroGraphSAGE(
-            node_types=data.node_types,
-            edge_types=data.edge_types,
-            channels=channels,
-            aggr=aggr,
-            num_layers=num_layers,
-        )
+
+        if gnn_type == "hgt":
+            self.gnn = HeteroHGT(
+                node_types=data.node_types,
+                edge_types=data.edge_types,
+                channels=channels,
+                heads=hgt_heads,
+                num_layers=num_layers,
+            )
+        else:
+            self.gnn = HeteroGraphSAGE(
+                node_types=data.node_types,
+                edge_types=data.edge_types,
+                channels=channels,
+                aggr=aggr,
+                num_layers=num_layers,
+            )
+
         self.head = MLP(
             channels,
             out_channels=out_channels,
@@ -100,8 +167,8 @@ class Model(torch.nn.Module):
         x_dict = self.gnn(
             x_dict,
             batch.edge_index_dict,
-            batch.num_sampled_nodes_dict,
-            batch.num_sampled_edges_dict,
+            num_sampled_nodes_dict=batch.num_sampled_nodes_dict,
+            num_sampled_edges_dict=batch.num_sampled_edges_dict,
         )
 
         return self.head(x_dict[entity_table][: seed_time.size(0)])

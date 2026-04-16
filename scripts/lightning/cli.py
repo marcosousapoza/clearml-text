@@ -21,9 +21,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--channels", type=int, default=128)
     parser.add_argument("--aggr", type=str, default="sum")
-    parser.add_argument("--num-layers", type=int, default=3)
-    parser.add_argument("--num-neighbors", type=int, default=128)
-    parser.add_argument("--temporal_strategy", type=str, default="uniform")
+    parser.add_argument("--num-layers", type=int, default=4)
+    parser.add_argument("--num-neighbors", type=int, default=32)
+    parser.add_argument("--temporal_strategy", type=str, default="last")
+    parser.add_argument("--gnn-type", type=str, default="sage", choices=["sage", "hgt"])
+    parser.add_argument("--hgt-heads", type=int, default=4)
     parser.add_argument("--max_steps_per_epoch", type=int, default=2000)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
@@ -67,6 +69,8 @@ def main(argv: list[str] | None = None) -> None:
         num_layers=args.num_layers,
         channels=args.channels,
         aggr=args.aggr,
+        gnn_type=args.gnn_type,
+        hgt_heads=args.hgt_heads,
         lr=args.lr,
         epochs=args.epochs,
         task=datamodule.artifacts.task,
