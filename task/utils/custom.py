@@ -307,6 +307,18 @@ def add_task_to_database(
 
     label_feature_df = label_df.drop(columns=[task.target_col])
     col_to_stype_dict[labels_table_name] = {}
+    if task.task_type == TaskType.MULTILABEL_CLASSIFICATION:
+        label_feature_df[task.target_col] = list(target_tensor(label_df).numpy())
+        col_to_stype_dict[labels_table_name][task.target_col] = TFStype.embedding
+    elif task.task_type in {
+        TaskType.BINARY_CLASSIFICATION,
+        TaskType.MULTICLASS_CLASSIFICATION,
+        TaskType.REGRESSION,
+    }:
+        label_feature_df[task.target_col] = label_df[task.target_col].astype(float)
+        col_to_stype_dict[labels_table_name][task.target_col] = (
+            task.target_feature_stype or TFStype.numerical
+        )
 
     db.table_dict[labels_table_name] = Table(
         df=label_feature_df,

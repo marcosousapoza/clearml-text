@@ -25,11 +25,10 @@ POITEM_INVOICE_RECEIPT_OUTCOMES = [
     "Cancel Invoice Receipt",
 ]
 
-
-class POItemCreationOutcome14Days(MEntityTask):
+class POItemCreationOutcome7Days(MEntityTask):
     """Branch after item creation: invoice, receipt, or quantity-change follow-up."""
 
-    timedelta = pd.Timedelta(days=14)
+    timedelta = pd.Timedelta(days=7)
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("POItem",)
     metrics = [accuracy, f1, roc_auc]
@@ -52,10 +51,10 @@ class POItemCreationOutcome14Days(MEntityTask):
         return self._make_table(df)
 
 
-class POItemInvoiceReceiptOutcome14Days(MEntityTask):
+class POItemInvoiceReceiptOutcome7Days(MEntityTask):
     """Operational follow-up after invoice receipt: clear, unblock, wait for goods, or cancel."""
 
-    timedelta = pd.Timedelta(days=14)
+    timedelta = pd.Timedelta(days=7)
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("POItem",)
     metrics = [accuracy, f1, roc_auc]
@@ -78,10 +77,10 @@ class POItemInvoiceReceiptOutcome14Days(MEntityTask):
         return self._make_table(df)
 
 
-class VendorFutureClearInvoiceItemCount14Days(MEntityTask):
+class VendorFutureClearInvoiceItemCount7Days(MEntityTask):
     """How many distinct PO items from this vendor will clear invoices soon?"""
 
-    timedelta = pd.Timedelta(days=14)
+    timedelta = pd.Timedelta(days=7)
     task_type = TaskType.REGRESSION
     object_types = ("Vendor",)
     metrics = [mae, mse, rmse, r2]

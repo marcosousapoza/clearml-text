@@ -15,7 +15,6 @@ from .utils import (
     build_stage_multiclass_next_event_table,
 )
 
-
 TD_STATUS_CLASSES = ["null", "in transit", "shipped"]
 
 
@@ -44,10 +43,10 @@ class ContainerLoadPhaseNextEvent4Hours(MEntityTask):
         return self._make_table(df)
 
 
-class VehicleBookingNextEvent14Days(MEntityTask):
+class VehicleBookingNextEvent7Days(MEntityTask):
     """Multiclass vehicle booking progression task."""
 
-    timedelta = pd.Timedelta(days=14)
+    timedelta = pd.Timedelta(days=7)
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("Vehicle",)
     metrics = [accuracy, f1, roc_auc]
@@ -97,10 +96,10 @@ class ContainerRemainingLoadTruckCount4Hours(MEntityTask):
         return self._make_table(df)
 
 
-class VehicleFutureContainerLoadCount14Days(MEntityTask):
+class VehicleFutureContainerLoadCount7Days(MEntityTask):
     """How many distinct containers will this booked vehicle load soon?"""
 
-    timedelta = pd.Timedelta(days=14)
+    timedelta = pd.Timedelta(days=7)
     task_type = TaskType.REGRESSION
     object_types = ("Vehicle",)
     metrics = [mae, mse, rmse, r2]
@@ -126,10 +125,10 @@ class VehicleFutureContainerLoadCount14Days(MEntityTask):
         return self._make_table(df)
 
 
-class TransportDocumentFutureDepartContainerCount14Days(MEntityTask):
+class TransportDocumentFutureDepartContainerCount7Days(MEntityTask):
     """How many distinct containers will depart under this document soon?"""
 
-    timedelta = pd.Timedelta(days=14)
+    timedelta = pd.Timedelta(days=7)
     task_type = TaskType.REGRESSION
     object_types = ("Transport Document",)
     metrics = [mae, mse, rmse, r2]
@@ -155,10 +154,10 @@ class TransportDocumentFutureDepartContainerCount14Days(MEntityTask):
         return self._make_table(df)
 
 
-class TransportDocumentStatusAfterOrder14Days(MEntityTask):
-    """Predict the transport document status reached by the 14-day horizon."""
+class TransportDocumentStatusAfterOrder7Days(MEntityTask):
+    """Predict the transport document status reached by the 7-day horizon."""
 
-    timedelta = pd.Timedelta(days=14)
+    timedelta = pd.Timedelta(days=7)
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("Transport Document",)
     metrics = [accuracy, f1, roc_auc]
@@ -181,10 +180,10 @@ class TransportDocumentStatusAfterOrder14Days(MEntityTask):
         return self._make_table(df)
 
 
-class TransportDocumentVehicleDepartWithin14Days(MEntityTask):
-    """Observed TD x Vehicle pair: will it co-depart within 14 days?"""
+class TransportDocumentVehicleDepartWithin7Days(MEntityTask):
+    """Observed TD x Vehicle pair: will it co-depart within 7 days?"""
 
-    timedelta = pd.Timedelta(days=14)
+    timedelta = pd.Timedelta(days=7)
     task_type = TaskType.BINARY_CLASSIFICATION
     object_types = ("Transport Document", "Vehicle")
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)
@@ -207,10 +206,10 @@ class TransportDocumentVehicleDepartWithin14Days(MEntityTask):
         return self._make_table(df)
 
 
-class TransportDocumentContainerDepartWithin14Days(MEntityTask):
-    """Observed TD x Container pair: will it co-depart within 14 days?"""
+class TransportDocumentContainerDepartWithin7Days(MEntityTask):
+    """Observed TD x Container pair: will it co-depart within 7 days?"""
 
-    timedelta = pd.Timedelta(days=14)
+    timedelta = pd.Timedelta(days=7)
     task_type = TaskType.BINARY_CLASSIFICATION
     object_types = ("Transport Document", "Container")
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)

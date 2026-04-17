@@ -14,7 +14,34 @@ from relbench.modeling.nn import HeteroEncoder, HeteroGraphSAGE, HeteroTemporalE
 
 # HGTConv's HeteroLinear uses a grouped GEMM kernel (segment_matmul) that
 # crashes on some GPU/driver combinations. Force the naive per-type matmul path.
-torch_geometric.backend.use_segment_matmul = False
+torch_geometric.backend.use_segment_matmul = False # type: ignore
+
+
+def _masked_tf_dict(batch: HeteroData, entity_table: NodeType, col_name: str) -> Dict[NodeType, Any]:
+    tf_dict = dict(batch.tf_dict)
+    tf = tf_dict[entity_table]
+    seed_rows = slice(0, int(batch[entity_table].seed_time.size(0)))
+    feat_dict = dict(tf.feat_dict)
+    for stype_name, cols in tf.col_names_dict.items():
+        if col_name not in cols:
+            continue
+        feat = feat_dict[stype_name].clone()
+        col_idx = cols.index(col_name)
+        if feat.dim() == 2:
+            feat[seed_rows, col_idx] = torch.nan
+        elif feat.dim() == 3:
+            feat[seed_rows, col_idx, :] = torch.nan
+        else:
+            raise ValueError(f"Unsupported feature rank {feat.dim()} for {entity_table}.{col_name}")
+        feat_dict[stype_name] = feat
+        break
+    tf_dict[entity_table] = type(tf)(
+        feat_dict=feat_dict,
+        col_names_dict=tf.col_names_dict,
+        y=tf.y,
+        num_rows=tf.num_rows,
+    )
+    return tf_dict
 
 
 class HeteroHGT(torch.nn.Module):
@@ -48,9 +75,9 @@ class HeteroHGT(torch.nn.Module):
 
     def reset_parameters(self):
         for conv in self.convs:
-            conv.reset_parameters()
+            conv.reset_parameters() # type: ignore
         for norm_dict in self.norms:
-            for norm in norm_dict.values():
+            for norm in norm_dict.values(): # type: ignore
                 norm.reset_parameters()
 
     def forward(
@@ -62,7 +89,7 @@ class HeteroHGT(torch.nn.Module):
         for conv, norm_dict in zip(self.convs, self.norms):
             out = conv(x_dict, edge_index_dict)
             x_dict = {
-                nt: norm_dict[nt](
+                nt: norm_dict[nt]( # type: ignore
                     out[nt] if (out.get(nt) is not None) else x_dict[nt]
                 ).relu()
                 for nt in x_dict
@@ -147,7 +174,7 @@ class Model(torch.nn.Module):
         self.gnn.reset_parameters()
         self.head.reset_parameters()
         for embedding in self.embedding_dict.values():
-            torch.nn.init.normal_(embedding.weight, std=0.1)
+            torch.nn.init.normal_(embedding.weight, std=0.1) # type: ignore
         if self.id_awareness_emb is not None:
             self.id_awareness_emb.reset_parameters()
 
@@ -157,7 +184,8 @@ class Model(torch.nn.Module):
         entity_table: NodeType,
     ) -> Tensor:
         seed_time = batch[entity_table].seed_time
-        x_dict = self.encoder(batch.tf_dict)
+        tf_dict = _masked_tf_dict(batch, entity_table, "target")
+        x_dict = self.encoder(tf_dict)
 
         rel_time_dict = self.temporal_encoder(
             seed_time, batch.time_dict, batch.batch_dict
@@ -189,7 +217,8 @@ class Model(torch.nn.Module):
                 "id_awareness must be set True to use forward_dst_readout"
             )
         seed_time = batch[entity_table].seed_time
-        x_dict = self.encoder(batch.tf_dict)
+        tf_dict = _masked_tf_dict(batch, entity_table, "target")
+        x_dict = self.encoder(tf_dict)
         # Add ID-awareness to the root node
         x_dict[entity_table][: seed_time.size(0)] += self.id_awareness_emb.weight
 

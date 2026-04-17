@@ -36,11 +36,10 @@ OFFER_RETURNED_OUTCOMES = [
     "O_Refused",
 ]
 
-
-class ApplicationValidationOutcome14Days(MEntityTask):
+class ApplicationValidationOutcome7Days(MEntityTask):
     """Branch after validation: pending, incomplete, denied, or cancelled."""
 
-    timedelta = pd.Timedelta(days=14)
+    timedelta = pd.Timedelta(days=7)
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("Application",)
     metrics = [accuracy, f1, roc_auc]
@@ -63,10 +62,10 @@ class ApplicationValidationOutcome14Days(MEntityTask):
         return self._make_table(df)
 
 
-class ApplicationIncompleteOutcome19Days(MEntityTask):
-    """What happens after an incomplete-file state in the next 19 days?"""
+class ApplicationIncompleteOutcome10Days(MEntityTask):
+    """What happens after an incomplete-file state in the next 10 days?"""
 
-    timedelta = pd.Timedelta(days=19)
+    timedelta = pd.Timedelta(days=10)
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("Application",)
     metrics = [accuracy, f1, roc_auc]
@@ -89,10 +88,10 @@ class ApplicationIncompleteOutcome19Days(MEntityTask):
         return self._make_table(df)
 
 
-class ApplicationFutureValidationCount19Days(MEntityTask):
+class ApplicationFutureValidationCount10Days(MEntityTask):
     """How many more validation passes will this incomplete application need soon?"""
 
-    timedelta = pd.Timedelta(days=19)
+    timedelta = pd.Timedelta(days=10)
     task_type = TaskType.REGRESSION
     object_types = ("Application",)
     metrics = [mae, mse, rmse, r2]
@@ -117,10 +116,10 @@ class ApplicationFutureValidationCount19Days(MEntityTask):
         return self._make_table(df)
 
 
-class OfferSentOutcome19Days(MEntityTask):
+class OfferSentOutcome10Days(MEntityTask):
     """After an offer is sent, does it return, cancel, or get refused?"""
 
-    timedelta = pd.Timedelta(days=19)
+    timedelta = pd.Timedelta(days=10)
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("Offer",)
     metrics = [accuracy, f1, roc_auc]
@@ -143,10 +142,10 @@ class OfferSentOutcome19Days(MEntityTask):
         return self._make_table(df)
 
 
-class OfferReturnedOutcome19Days(MEntityTask):
+class OfferReturnedOutcome10Days(MEntityTask):
     """Customer response after an offer is returned: accept, cancel, or refuse."""
 
-    timedelta = pd.Timedelta(days=19)
+    timedelta = pd.Timedelta(days=10)
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("Offer",)
     metrics = [accuracy, f1, roc_auc]

@@ -14,14 +14,13 @@ from .utils import (
     build_stage_multiclass_next_event_table,
 )
 
-
 ORDER_PAYMENT_OUTCOMES = ["pay order", "payment reminder"]
 
 
-class OrderPaymentOutcome30Days(MEntityTask):
+class OrderPaymentOutcome14Days(MEntityTask):
     """After confirmation, does the order get paid or need a reminder next?"""
 
-    timedelta = pd.Timedelta(days=30)
+    timedelta = pd.Timedelta(days=14)
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("orders",)
     metrics = [accuracy, f1, roc_auc]
@@ -44,10 +43,10 @@ class OrderPaymentOutcome30Days(MEntityTask):
         return self._make_table(df)
 
 
-class OrderFutureReminderCount30Days(MEntityTask):
-    """How many payment reminders remain for a confirmed order over 30 days?"""
+class OrderFutureReminderCount14Days(MEntityTask):
+    """How many payment reminders remain for a confirmed order over 14 days?"""
 
-    timedelta = pd.Timedelta(days=30)
+    timedelta = pd.Timedelta(days=14)
     task_type = TaskType.REGRESSION
     object_types = ("orders",)
     metrics = [mae, mse, rmse, r2]
@@ -72,10 +71,10 @@ class OrderFutureReminderCount30Days(MEntityTask):
         return self._make_table(df)
 
 
-class CustomerProductRepeatOrderWithin14Days(MEntityTask):
-    """Observed customer-product pair: will it place another order within 14 days?"""
+class CustomerProductRepeatOrderWithin7Days(MEntityTask):
+    """Observed customer-product pair: will it place another order within 7 days?"""
 
-    timedelta = pd.Timedelta(days=14)
+    timedelta = pd.Timedelta(days=7)
     task_type = TaskType.BINARY_CLASSIFICATION
     object_types = ("customers", "products")
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)
@@ -98,10 +97,10 @@ class CustomerProductRepeatOrderWithin14Days(MEntityTask):
         return self._make_table(df)
 
 
-class CustomerProductFutureOrderCount30Days(MEntityTask):
-    """Observed customer-product pair: how many repeat orders arrive in 30 days?"""
+class CustomerProductFutureOrderCount14Days(MEntityTask):
+    """Observed customer-product pair: how many repeat orders arrive in 14 days?"""
 
-    timedelta = pd.Timedelta(days=30)
+    timedelta = pd.Timedelta(days=14)
     task_type = TaskType.REGRESSION
     object_types = ("customers", "products")
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)
