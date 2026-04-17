@@ -46,6 +46,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--flatten", action="store_true", help="Flatten databases to each task's object types.")
     parser.add_argument("--accelerator", type=str, default=None, help="Accelerator override (e.g. cpu, gpu). Defaults to gpu if available, else cpu.")
     parser.add_argument("--epochs", type=int, default=None, help="Number of training epochs. Defaults to the scripts.lightning default.")
+    parser.add_argument("--gnn-type", type=str, default="sage", choices=["sage", "hgt"], help="GNN backbone to use for every spawned training run.")
     parser.add_argument("--wandb", action="store_true", help="Also log metrics to Weights & Biases.")
     parser.add_argument("--wandb-project", type=str, default="ocel-ocp", help="W&B project name.")
     parser.add_argument("--jobs-per-gpu", type=int, default=1, help="Number of training jobs to run in parallel per GPU.")
@@ -57,7 +58,15 @@ def main(argv: list[str] | None = None) -> None:
     accelerator = args.accelerator or ("gpu" if gpu_ids else "cpu")
     if accelerator == "cpu":
         gpu_ids = []
-    jobs = _build_jobs(accelerator, set(args.dataset), args.flatten, args.epochs, args.wandb, args.wandb_project)
+    jobs = _build_jobs(
+        accelerator,
+        set(args.dataset),
+        args.flatten,
+        args.epochs,
+        args.gnn_type,
+        args.wandb,
+        args.wandb_project,
+    )
 
     failures = _run_jobs(jobs, gpu_ids, parallelism, args.jobs_per_gpu)
     if failures:
@@ -67,7 +76,15 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(1)
 
 
-def _build_jobs(accelerator: str, datasets: set[str], flatten: bool, epochs: int | None = None, wandb: bool = False, wandb_project: str = "ocel-ocp") -> list[TrainingJob]:
+def _build_jobs(
+    accelerator: str,
+    datasets: set[str],
+    flatten: bool,
+    epochs: int | None = None,
+    gnn_type: str = "sage",
+    wandb: bool = False,
+    wandb_project: str = "ocel-ocp",
+) -> list[TrainingJob]:
     jobs = []
     available_datasets = {dataset for dataset, _task, _task_cls in TASK_SPECS}
     unknown_datasets = datasets - available_datasets
@@ -82,7 +99,17 @@ def _build_jobs(accelerator: str, datasets: set[str], flatten: bool, epochs: int
         if datasets and dataset not in datasets:
             continue
         for seed in TRAIN_ALL_SEEDS:
-            command, log_path = _build_command(dataset, task, accelerator, seed, flatten, epochs, wandb, wandb_project)
+            command, log_path = _build_command(
+                dataset,
+                task,
+                accelerator,
+                seed,
+                flatten,
+                epochs,
+                gnn_type,
+                wandb,
+                wandb_project,
+            )
             jobs.append(
                 TrainingJob(
                     dataset=dataset,
@@ -144,6 +171,7 @@ def _build_command(
     seed: int,
     flatten: bool,
     epochs: int | None = None,
+    gnn_type: str = "sage",
     wandb: bool = False,
     wandb_project: str = "ocel-ocp",
 ) -> tuple[list[str], Path]:
@@ -160,6 +188,8 @@ def _build_command(
         task,
         "--accelerator",
         accelerator,
+        "--gnn-type",
+        gnn_type,
         "--seed",
         str(seed),
         "--default-root-dir",

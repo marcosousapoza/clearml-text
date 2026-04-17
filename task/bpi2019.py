@@ -1,144 +1,108 @@
 import pandas as pd
 from pandas import Series
 from relbench.base import Database, Table, TaskType
-from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
+from relbench.metrics import accuracy, f1, mae, mse, r2, rmse, roc_auc
 
-from data.const import O2O_DST_COL, O2O_SRC_COL, OBJECT_TABLE
 from data.wrapper import check_dbs
 from .utils import (
+    Log1pZScoreTargetTransform,
     MEntityTask,
-    build_event_within_table,
-    build_next_event_table,
-    build_next_time_table,
-    build_pair_event_within_table,
-    build_remaining_time_table,
+    build_stage_future_distinct_related_count_table,
+    build_stage_multiclass_next_event_table,
 )
 
 
-class POItemNextEvent(MEntityTask):
-    timedelta = pd.Timedelta(days=14)
+POITEM_CREATION_OUTCOMES = [
+    "Vendor creates invoice",
+    "Record Goods Receipt",
+    "Change Quantity",
+]
 
+POITEM_INVOICE_RECEIPT_OUTCOMES = [
+    "Clear Invoice",
+    "Remove Payment Block",
+    "Record Goods Receipt",
+    "Cancel Invoice Receipt",
+]
+
+
+class POItemCreationOutcome14Days(MEntityTask):
+    """Branch after item creation: invoice, receipt, or quantity-change follow-up."""
+
+    timedelta = pd.Timedelta(days=14)
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("POItem",)
-    event_types = [
-        "Block Purchase Order Item",
-        "Cancel Goods Receipt",
-        "Cancel Invoice Receipt",
-        "Cancel Subsequent Invoice",
-        "Change Approval for Purchase Order",
-        "Change Currency",
-        "Change Delivery Indicator",
-        "Change Final Invoice Indicator",
-        "Change Price",
-        "Change Quantity",
-        "Change Rejection Indicator",
-        "Change Storage Location",
-        "Change payment term",
-        "Clear Invoice",
-        "Create Purchase Order Item",
-        "Create Purchase Requisition Item",
-        "Delete Purchase Order Item",
-        "Reactivate Purchase Order Item",
-        "Receive Order Confirmation",
-        "Record Goods Receipt",
-        "Record Invoice Receipt",
-        "Record Service Entry Sheet",
-        "Record Subsequent Invoice",
-        "Release Purchase Order",
-        "Release Purchase Requisition",
-        "Remove Payment Block",
-        "SRM: Awaiting Approval",
-        "SRM: Change was Transmitted",
-        "SRM: Complete",
-        "SRM: Created",
-        "SRM: Deleted",
-        "SRM: Document Completed",
-        "SRM: Held",
-        "SRM: In Transfer to Execution Syst.",
-        "SRM: Incomplete",
-        "SRM: Ordered",
-        "SRM: Transaction Completed",
-        "SRM: Transfer Failed (E.Sys.)",
-        "Set Payment Block",
-        "Update Order Confirmation",
-        "Vendor creates debit memo",
-        "Vendor creates invoice",
-    ]
-    num_classes = 42
     metrics = [accuracy, f1, roc_auc]
+    num_classes = len(POITEM_CREATION_OUTCOMES)
+    source_event_type = "Create Purchase Order Item"
+    next_event_types = POITEM_CREATION_OUTCOMES
+    source_max_age = timedelta
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        return self._make_table(
-            build_next_event_table(db, self.object_types[0], timestamps, self.event_types)
+        df = build_stage_multiclass_next_event_table(
+            db=db,
+            object_type="POItem",
+            timestamps=timestamps,
+            delta=self.timedelta,
+            source_event_type=self.source_event_type,
+            next_event_types=self.next_event_types,
+            source_max_age=self.source_max_age,
         )
+        return self._make_table(df)
 
 
-class POItemNextTime(MEntityTask):
+class POItemInvoiceReceiptOutcome14Days(MEntityTask):
+    """Operational follow-up after invoice receipt: clear, unblock, wait for goods, or cancel."""
+
     timedelta = pd.Timedelta(days=14)
+    task_type = TaskType.MULTICLASS_CLASSIFICATION
+    object_types = ("POItem",)
+    metrics = [accuracy, f1, roc_auc]
+    num_classes = len(POITEM_INVOICE_RECEIPT_OUTCOMES)
+    source_event_type = "Record Invoice Receipt"
+    next_event_types = POITEM_INVOICE_RECEIPT_OUTCOMES
+    source_max_age = timedelta
 
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        df = build_stage_multiclass_next_event_table(
+            db=db,
+            object_type="POItem",
+            timestamps=timestamps,
+            delta=self.timedelta,
+            source_event_type=self.source_event_type,
+            next_event_types=self.next_event_types,
+            source_max_age=self.source_max_age,
+        )
+        return self._make_table(df)
+
+
+class VendorFutureClearInvoiceItemCount14Days(MEntityTask):
+    """How many distinct PO items from this vendor will clear invoices soon?"""
+
+    timedelta = pd.Timedelta(days=14)
     task_type = TaskType.REGRESSION
-    object_types = ("POItem",)
+    object_types = ("Vendor",)
     metrics = [mae, mse, rmse, r2]
+    source_event_type = "Vendor creates invoice"
+    target_event_type = "Clear Invoice"
+    related_object_type = "POItem"
+    source_max_age = timedelta
+
+    def make_target_transform(self):
+        return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        return self._make_table(
-            build_next_time_table(db, self.object_types[0], timestamps)
+        df = build_stage_future_distinct_related_count_table(
+            db=db,
+            object_type="Vendor",
+            related_object_type=self.related_object_type,
+            timestamps=timestamps,
+            delta=self.timedelta,
+            source_event_type=self.source_event_type,
+            target_event_type=self.target_event_type,
+            source_max_age=self.source_max_age,
         )
-
-
-class POItemRemainingTime(MEntityTask):
-    timedelta = pd.Timedelta(days=14)
-
-    task_type = TaskType.REGRESSION
-    object_types = ("POItem",)
-    metrics = [mae, mse, rmse, r2]
-
-    @check_dbs
-    def make_table(self, db: Database, timestamps: Series) -> Table:
-        return self._make_table(
-            build_remaining_time_table(db, self.object_types[0], timestamps)
-        )
-
-
-class POItemClearInvoiceWithin14Days(MEntityTask):
-    timedelta = pd.Timedelta(days=14)
-    task_type = TaskType.BINARY_CLASSIFICATION
-    object_types = ("POItem",)
-    metrics = [accuracy, f1, auprc, roc_auc]
-
-    @check_dbs
-    def make_table(self, db: Database, timestamps: Series) -> Table:
-        return self._make_table(
-            build_event_within_table(
-                db=db,
-                object_type="POItem",
-                event_type="Clear Invoice",
-                times=timestamps,
-                delta=self.timedelta,
-            )
-        )
-
-
-class POItemVendorClearInvoiceWithin14Days(MEntityTask):
-    timedelta = pd.Timedelta(days=14)
-
-    task_type = TaskType.BINARY_CLASSIFICATION
-    # Pair-entity task: src = POItem, dst = Vendor
-    entity_cols = (O2O_SRC_COL, O2O_DST_COL)
-    entity_tables = (OBJECT_TABLE, OBJECT_TABLE)
-    object_types = ("POItem", "Vendor")
-    metrics = [accuracy, f1, auprc, roc_auc]
-
-    @check_dbs
-    def make_table(self, db: Database, timestamps: Series) -> Table:
-        return self._make_table(
-            build_pair_event_within_table(
-                db=db,
-                object_types=("POItem", "Vendor"),
-                event_type="Clear Invoice",
-                times=timestamps,
-                delta=self.timedelta,
-            )
-        )
+        return self._make_table(df)

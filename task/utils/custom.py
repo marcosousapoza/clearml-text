@@ -11,6 +11,7 @@ from relbench.modeling.graph import (
     NodeTrainTableInput,
     to_unix_time,
 )
+from torch_frame import stype as TFStype
 
 from data.const import OBJECT_ID_COL, OBJECT_TABLE, TIME_COL
 from task.metrics import roc_auc
@@ -42,7 +43,10 @@ def _stats_regression(df: pd.DataFrame, col: str, stats: dict) -> None:
 
 def _stats_multilabel(df: pd.DataFrame, col: str, stats: dict) -> None:
     # Multilabel: track how many labels each entity has and per-class frequency.
-    arr       = np.array([row for row in df[col]])
+    raw: np.ndarray = np.asarray(df[col].values)
+    if len(raw) > 0 and isinstance(raw[0], str):
+        raw = np.array([np.fromstring(r.strip("[]"), sep=" ") for r in raw], dtype=np.float32)
+    arr       = np.array([row for row in raw])
     arr_row   = arr.sum(1)
     arr_class = arr.sum(0)
     max_idx   = int(arr_class.argmax())
@@ -56,8 +60,18 @@ def _stats_multilabel(df: pd.DataFrame, col: str, stats: dict) -> None:
     stats["min_num_class_num"]           = arr_class[min_idx]
 
 
+def _stats_multiclass(df: pd.DataFrame, col: str, stats: dict) -> None:
+    counts = df[col].value_counts().sort_index()
+    stats["num_classes_present"] = int(counts.shape[0])
+    stats["majority_class_idx"] = int(counts.idxmax())
+    stats["majority_class_count"] = int(counts.max())
+    stats["minority_class_idx"] = int(counts.idxmin())
+    stats["minority_class_count"] = int(counts.min())
+
+
 _STATS_HANDLERS: dict[TaskType, Callable] = {
     TaskType.BINARY_CLASSIFICATION:      _stats_binary,
+    TaskType.MULTICLASS_CLASSIFICATION:  _stats_multiclass,
     TaskType.REGRESSION:                 _stats_regression,
     TaskType.MULTILABEL_CLASSIFICATION:  _stats_multilabel,
 }
@@ -86,6 +100,11 @@ class MEntityTask(BaseTask):
     task_type: TaskType
     object_types: tuple[str, ...]
     num_eval_timestamps: int = 1000 # very large number to generate all validation observations
+
+    # Kept for backwards compatibility with existing task declarations.
+    # Label tables are always registered without feature stypes so the target
+    # cannot be consumed as a node feature.
+    target_feature_stype: TFStype | None = None
 
     def make_target_transform(self) -> TargetTransform | None:
         return None
@@ -132,7 +151,15 @@ class MEntityTask(BaseTask):
         if target_table is None:
             target_table = self.get_table("test", mask_input_cols=False)
 
-        target = target_table.df[self.target_col].to_numpy()
+        raw_target: np.ndarray = np.asarray(target_table.df[self.target_col].values)
+        if self.task_type == TaskType.MULTILABEL_CLASSIFICATION:
+            if len(raw_target) > 0 and isinstance(raw_target[0], str):
+                raw_target = np.array(
+                    [np.fromstring(r.strip("[]"), sep=" ") for r in raw_target], dtype=np.float32
+                )
+            else:
+                raw_target = np.stack(raw_target).astype(np.float32) # type: ignore
+        target: np.ndarray = raw_target
         if len(pred) != len(target):
             raise ValueError(
                 f"The length of pred and target must be the same (got "
@@ -151,6 +178,18 @@ class MEntityTask(BaseTask):
                 continue
             if self.task_type == TaskType.MULTICLASS_CLASSIFICATION and metric_name == "roc_auc":
                 results["multiclass_roc_auc"] = roc_auc(target, pred)
+                continue
+            if self.task_type == TaskType.MULTILABEL_CLASSIFICATION:
+                # pred is (N, K) logits or probabilities; threshold at 0.5 for hard metrics.
+                pred_bin = (pred > 0.5).astype(int)
+                if metric_name == "f1":
+                    results["multilabel_f1_macro"] = float(
+                        skm.f1_score(target, pred_bin, average="macro", zero_division=0)
+                    )
+                elif metric_name == "accuracy":
+                    results["multilabel_accuracy"] = float(skm.accuracy_score(target, pred_bin))
+                else:
+                    results[metric_name] = fn(target, pred_bin)
                 continue
             results[metric_name] = fn(target, pred)
 
@@ -228,10 +267,10 @@ def add_task_to_database(
 ) -> tuple[Any, dict[str, NodeTrainTableInput], TargetTransform | None]:
     """Add one MEntityTask's label table to the database and return split inputs.
 
-    Concatenates train/val/test DataFrames into a single label table (without
-    the target column), registers it in the database, then builds per-split
-    NodeTrainTableInput objects with time-shifted indices and optional target
-    normalization.
+    Concatenates train/val/test DataFrames into a single label table,
+    registers it in the database without exposing the target as a feature,
+    then builds per-split NodeTrainTableInput objects with time-shifted
+    indices and optional target normalization.
     """
 
     def target_tensor(df: pd.DataFrame) -> torch.Tensor:
@@ -239,7 +278,15 @@ def add_task_to_database(
         if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
             return torch.from_numpy(df[task.target_col].to_numpy(dtype=int, copy=True))
         if task.task_type == TaskType.MULTILABEL_CLASSIFICATION:
-            return torch.from_numpy(np.stack(df[task.target_col].values))  # type: ignore
+            # Multilabel targets may be stored as object arrays of np.ndarray
+            # or, after parquet round-trip, as string representations.
+            # Normalise to a float32 array in both cases.
+            raw: np.ndarray = np.asarray(df[task.target_col].values)
+            if len(raw) > 0 and isinstance(raw[0], str):
+                raw = np.array([np.fromstring(r.strip("[]"), sep=" ") for r in raw], dtype=np.float32)
+            else:
+                raw = np.stack(raw).astype(np.float32) # type: ignore
+            return torch.from_numpy(raw)
         return torch.from_numpy(df[task.target_col].to_numpy(dtype=float, copy=True))
 
     labels_table_name = f"{task_name}_labels"
@@ -255,18 +302,18 @@ def add_task_to_database(
         [split_frames["train"], split_frames["val"], split_frames["test"]],
         ignore_index=True,
     )
-    label_feature_df = label_df.drop(columns=[task.target_col])
 
     fkey_col_to_pkey_table = dict(zip(task.entity_cols, task.entity_tables))
+
+    label_feature_df = label_df.drop(columns=[task.target_col])
+    col_to_stype_dict[labels_table_name] = {}
+
     db.table_dict[labels_table_name] = Table(
         df=label_feature_df,
         fkey_col_to_pkey_table=fkey_col_to_pkey_table,
         pkey_col=None,
         time_col=task.time_col,
     )
-
-    # Task labels must not be part of the node features.
-    col_to_stype_dict[labels_table_name] = {}
     target_transform = task.make_target_transform()
     if target_transform is not None:
         target_transform.fit(target_tensor(split_frames["train"]))

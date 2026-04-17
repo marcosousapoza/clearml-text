@@ -12,8 +12,7 @@ from task.utils import MEntityTask
 from task.utils.transform import TargetTransform
 
 from .data import DataArtifacts
-from .metrics import RelbenchEvalMetric
-from .task_config import TaskSetup, build_task_setup
+from .metrics import RelbenchEvalMetric, TaskSetup, build_task_setup
 
 
 class EntityGNNLightningModule(LightningModule):

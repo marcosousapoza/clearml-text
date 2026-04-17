@@ -232,7 +232,7 @@ class OrderManagementDataset(OCELDataset):
     """
 
     val_timestamp = pd.Timestamp("2023-09-27 09:22:38")
-    test_timestamp = pd.Timestamp("2023-12-01 00:00:00")
+    test_timestamp = pd.Timestamp("2023-12-01 09:22:38")
 
     _uri = "https://zenodo.org/records/8428112/files/order-management.json?download=1"
     _file_format = "json"
@@ -418,7 +418,7 @@ class BPI2017(OCELDataset):
         CC-BY 4.0
     """
 
-    val_timestamp = pd.Timestamp("2016-10-05 00:00:00")
+    val_timestamp = pd.Timestamp("2016-10-05 05:00:00")
     test_timestamp = pd.Timestamp("2016-10-25 00:00:00")
 
     _uri = "https://data.4tu.nl/file/6889ca3f-97cf-459a-b630-3b0b0d8664b5/5d5b9f89-7fa6-4c92-b6ac-04f854bdf92e"

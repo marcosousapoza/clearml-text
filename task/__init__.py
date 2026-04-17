@@ -1,59 +1,73 @@
 from pathlib import Path
 from typing import cast
+from tqdm import tqdm
 
 from data.cache import configure_cache_environment
 from relbench.base import BaseTask
 from relbench.tasks import get_task, register_task
 
 from .bpi2017 import (
-    ApplicationCompletedWithin14Days,
-    ApplicationNextEvent,
-    CaseRNextTime,
-    CaseRRemainingTime,
-    OfferCancelledWithin14Days,
+    ApplicationFutureValidationCount19Days,
+    ApplicationIncompleteOutcome19Days,
+    ApplicationValidationOutcome14Days,
+    OfferSentOutcome19Days,
+    OfferReturnedOutcome19Days,
 )
 from .bpi2019 import (
-    POItemClearInvoiceWithin14Days,
-    POItemNextEvent,
-    POItemNextTime,
-    POItemRemainingTime,
-    POItemVendorClearInvoiceWithin14Days,
+    POItemCreationOutcome14Days,
+    POItemInvoiceReceiptOutcome14Days,
+    VendorFutureClearInvoiceItemCount14Days,
 )
 from .container_logistics import (
-    ContainerDepartWithin7Days,
-    ContainerNextEvent,
-    ContainerNextTime,
-    ContainerRemainingTime,
-    TransportDocumentVehicleDepartWithin7Days,
+    ContainerLoadPhaseNextEvent4Hours,
+    ContainerRemainingLoadTruckCount4Hours,
+    TransportDocumentContainerDepartWithin14Days,
+    TransportDocumentFutureDepartContainerCount14Days,
+    TransportDocumentStatusAfterOrder14Days,
+    TransportDocumentVehicleDepartWithin14Days,
+    VehicleBookingNextEvent14Days,
+    VehicleFutureContainerLoadCount14Days,
 )
 from .order_management import (
-    CustomerProductPlaceOrderWithin14Days,
-    OrderNextEvent,
-    OrderNextTime,
-    OrderRemainingTime,
+    CustomerProductFutureOrderCount30Days,
+    CustomerProductRepeatOrderWithin14Days,
+    OrderFutureReminderCount30Days,
+    OrderPaymentOutcome30Days,
 )
 
 
 TASK_SPECS = (
-    ("bpi2017", "next_event_cases", ApplicationNextEvent),
-    ("bpi2017", "next_time_cases", CaseRNextTime),
-    ("bpi2017", "remaining_time_cases", CaseRRemainingTime),
-    ("bpi2017", "application_completed_within_14d", ApplicationCompletedWithin14Days),
-    ("bpi2017", "event_within", OfferCancelledWithin14Days),
-    ("bpi2019", "next_event_po_items", POItemNextEvent),
-    ("bpi2019", "next_time_po_items", POItemNextTime),
-    ("bpi2019", "remaining_time_po_items", POItemRemainingTime),
-    ("bpi2019", "po_item_clear_invoice_within_14d", POItemClearInvoiceWithin14Days),
-    ("bpi2019", "event_within", POItemVendorClearInvoiceWithin14Days),
-    ("order_management", "next_event_orders", OrderNextEvent),
-    ("order_management", "next_time_orders", OrderNextTime),
-    ("order_management", "remaining_time_orders", OrderRemainingTime),
-    ("order_management", "event_within", CustomerProductPlaceOrderWithin14Days),
-    ("container_logistics", "next_event_containers", ContainerNextEvent),
-    ("container_logistics", "next_time_containers", ContainerNextTime),
-    ("container_logistics", "remaining_time_containers", ContainerRemainingTime),
-    ("container_logistics", "container_depart_within_7d", ContainerDepartWithin7Days),
-    ("container_logistics", "event_within", TransportDocumentVehicleDepartWithin7Days),
+    # bpi2017 — Application tasks
+    ("bpi2017", "application_validation_outcome_14d",      ApplicationValidationOutcome14Days),
+    ("bpi2017", "application_incomplete_outcome_19d",      ApplicationIncompleteOutcome19Days),
+    ("bpi2017", "application_future_validation_count_19d", ApplicationFutureValidationCount19Days),
+    # bpi2017 — Offer tasks
+    ("bpi2017", "offer_sent_outcome_19d",                  OfferSentOutcome19Days),
+    ("bpi2017", "offer_returned_outcome_19d",              OfferReturnedOutcome19Days),
+
+    # bpi2019 — POItem / Vendor tasks
+    ("bpi2019", "po_item_creation_outcome_14d",              POItemCreationOutcome14Days),
+    ("bpi2019", "po_item_invoice_receipt_outcome_14d",       POItemInvoiceReceiptOutcome14Days),
+    ("bpi2019", "vendor_future_clear_invoice_item_count_14d", VendorFutureClearInvoiceItemCount14Days),
+
+    # order_management — Order tasks
+    ("order_management", "order_payment_outcome_30d",               OrderPaymentOutcome30Days),
+    ("order_management", "order_future_reminder_count_30d",         OrderFutureReminderCount30Days),
+    # order_management — Pair tasks
+    ("order_management", "customer_product_repeat_order_14d",       CustomerProductRepeatOrderWithin14Days),
+    ("order_management", "customer_product_future_order_count_30d", CustomerProductFutureOrderCount30Days),
+
+    # container_logistics — Container tasks
+    ("container_logistics", "container_load_phase_next_event_4h",         ContainerLoadPhaseNextEvent4Hours),
+    ("container_logistics", "container_remaining_load_truck_count_4h",    ContainerRemainingLoadTruckCount4Hours),
+    # container_logistics — Vehicle / Transport Document tasks
+    ("container_logistics", "vehicle_booking_next_event_14d",             VehicleBookingNextEvent14Days),
+    ("container_logistics", "vehicle_future_container_load_count_14d",    VehicleFutureContainerLoadCount14Days),
+    ("container_logistics", "transport_document_future_depart_container_count_14d", TransportDocumentFutureDepartContainerCount14Days),
+    ("container_logistics", "transport_document_status_after_order_14d",  TransportDocumentStatusAfterOrder14Days),
+    # container_logistics — Pair tasks
+    ("container_logistics", "transport_document_vehicle_depart_14d",      TransportDocumentVehicleDepartWithin14Days),
+    ("container_logistics", "transport_document_container_depart_14d",    TransportDocumentContainerDepartWithin14Days),
 )
 
 
@@ -61,7 +75,7 @@ def register_tasks(cache_root: str | Path | None = None) -> None:
     resolved_cache_root = configure_cache_environment(cache_root)
     get_task.cache_clear()
 
-    for dataset_name, task_name, task_cls in TASK_SPECS:
+    for dataset_name, task_name, task_cls in tqdm(TASK_SPECS):
         register_task(
             dataset_name,
             task_name,

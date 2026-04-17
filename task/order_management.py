@@ -6,85 +6,122 @@ from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
 from data.const import O2O_DST_COL, O2O_SRC_COL, OBJECT_TABLE
 from data.wrapper import check_dbs
 from .utils import (
-    QuantileTargetTransform,
+    Log1pZScoreTargetTransform,
     MEntityTask,
-    build_complete_pair_event_within_table,
-    build_next_event_table,
-    build_next_time_table,
-    build_remaining_time_table,
+    build_observed_pair_event_within_table,
+    build_observed_pair_future_event_count_table,
+    build_stage_future_event_count_table,
+    build_stage_multiclass_next_event_table,
 )
 
 
-class OrderNextEvent(MEntityTask):
-    timedelta = pd.Timedelta(days=7)
+ORDER_PAYMENT_OUTCOMES = ["pay order", "payment reminder"]
 
+
+class OrderPaymentOutcome30Days(MEntityTask):
+    """After confirmation, does the order get paid or need a reminder next?"""
+
+    timedelta = pd.Timedelta(days=30)
     task_type = TaskType.MULTICLASS_CLASSIFICATION
     object_types = ("orders",)
-    event_types = [
-        "confirm order",
-        "pay order",
-        "payment reminder",
-    ]
-    num_classes = 3
     metrics = [accuracy, f1, roc_auc]
+    num_classes = len(ORDER_PAYMENT_OUTCOMES)
+    source_event_type = "confirm order"
+    next_event_types = ORDER_PAYMENT_OUTCOMES
+    source_max_age = timedelta
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        return self._make_table(
-            build_next_event_table(db, self.object_types[0], timestamps, self.event_types)
+        df = build_stage_multiclass_next_event_table(
+            db=db,
+            object_type="orders",
+            timestamps=timestamps,
+            delta=self.timedelta,
+            source_event_type=self.source_event_type,
+            next_event_types=self.next_event_types,
+            source_max_age=self.source_max_age,
         )
+        return self._make_table(df)
 
 
-class OrderNextTime(MEntityTask):
-    timedelta = pd.Timedelta(days=7)
+class OrderFutureReminderCount30Days(MEntityTask):
+    """How many payment reminders remain for a confirmed order over 30 days?"""
 
+    timedelta = pd.Timedelta(days=30)
     task_type = TaskType.REGRESSION
     object_types = ("orders",)
     metrics = [mae, mse, rmse, r2]
+    source_event_type = "confirm order"
+    target_event_type = "payment reminder"
+    source_max_age = timedelta
 
-    def make_target_transform(self): return QuantileTargetTransform()
-
-    @check_dbs
-    def make_table(self, db: Database, timestamps: Series) -> Table:
-        return self._make_table(
-            build_next_time_table(db, self.object_types[0], timestamps)
-        )
-
-
-class OrderRemainingTime(MEntityTask):
-    timedelta = pd.Timedelta(days=7)
-
-    task_type = TaskType.REGRESSION
-    object_types = ("orders",)
-    metrics = [mae, mse, rmse, r2]
-
-    def make_target_transform(self): return QuantileTargetTransform()
+    def make_target_transform(self):
+        return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        return self._make_table(
-            build_remaining_time_table(db, self.object_types[0], timestamps)
+        df = build_stage_future_event_count_table(
+            db=db,
+            object_type="orders",
+            timestamps=timestamps,
+            delta=self.timedelta,
+            source_event_type=self.source_event_type,
+            target_event_type=self.target_event_type,
+            source_max_age=self.source_max_age,
         )
+        return self._make_table(df)
 
 
-class CustomerProductPlaceOrderWithin14Days(MEntityTask):
+class CustomerProductRepeatOrderWithin14Days(MEntityTask):
+    """Observed customer-product pair: will it place another order within 14 days?"""
+
     timedelta = pd.Timedelta(days=14)
-
     task_type = TaskType.BINARY_CLASSIFICATION
-    # Complete cartesian pair task: every customer × every product combination
+    object_types = ("customers", "products")
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)
     entity_tables = (OBJECT_TABLE, OBJECT_TABLE)
-    object_types = ("customers", "products")
     metrics = [accuracy, f1, auprc, roc_auc]
+    source_event_type = "confirm order"
+    target_event_type = "place order"
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        return self._make_table(
-            build_complete_pair_event_within_table(
-                db=db,
-                object_types=("customers", "products"),
-                event_type="place order",
-                times=timestamps,
-                delta=self.timedelta,
-            )
+        df = build_observed_pair_event_within_table(
+            db=db,
+            object_types=self.object_types,  # type: ignore[arg-type]
+            timestamps=timestamps,
+            delta=self.timedelta,
+            source_event_type=self.source_event_type,
+            target_event_type=self.target_event_type,
+            source_max_age=None,
         )
+        return self._make_table(df)
+
+
+class CustomerProductFutureOrderCount30Days(MEntityTask):
+    """Observed customer-product pair: how many repeat orders arrive in 30 days?"""
+
+    timedelta = pd.Timedelta(days=30)
+    task_type = TaskType.REGRESSION
+    object_types = ("customers", "products")
+    entity_cols = (O2O_SRC_COL, O2O_DST_COL)
+    entity_tables = (OBJECT_TABLE, OBJECT_TABLE)
+    metrics = [mae, mse, rmse, r2]
+    source_event_type = "confirm order"
+    target_event_type = "place order"
+
+    def make_target_transform(self):
+        return Log1pZScoreTargetTransform()
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        df = build_observed_pair_future_event_count_table(
+            db=db,
+            object_types=self.object_types,  # type: ignore[arg-type]
+            timestamps=timestamps,
+            delta=self.timedelta,
+            source_event_type=self.source_event_type,
+            target_event_type=self.target_event_type,
+            source_max_age=None,
+        )
+        return self._make_table(df)
