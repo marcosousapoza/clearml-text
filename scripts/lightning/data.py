@@ -122,10 +122,8 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         entity_table = next(iter(entity_tables))
         tuple_arity = len(task.entity_cols)
 
-        train_hops = _build_num_neighbors(self.num_neighbors, self.num_layers)
-        eval_hops = [-1] * self.num_layers
-        train_num_neighbors = {et: train_hops for et in data.edge_types}
-        eval_num_neighbors = {et: eval_hops for et in data.edge_types}
+        hops = _build_num_neighbors(self.num_neighbors, self.num_layers)
+        num_neighbors = {et: hops for et in data.edge_types}
 
         self._loader_dict = {}
         for split in ["train", "val", "test"]:
@@ -145,7 +143,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
 
             self._loader_dict[split] = TupleNeighborLoader(
                 data,
-                num_neighbors=train_num_neighbors if split == "train" else eval_num_neighbors,
+                num_neighbors=num_neighbors,
                 input_nodes_tuple=input_nodes_tuple,
                 input_time_tuple=input_time_tuple,
                 targets=targets,
