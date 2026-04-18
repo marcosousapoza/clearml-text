@@ -17,7 +17,6 @@ from .bpi2019 import (
     POItemCreationOutcome7Days,
     POItemInvoiceReceiptOutcome7Days,
     POItemInvoicedNetWorth30Days,
-    POItemTimeToClearInvoice,
     VendorFutureClearInvoiceItemCount7Days,
 )
 from .container_logistics import (
@@ -51,7 +50,6 @@ TASK_SPECS = (
     ("bpi2019", "po_item_creation_outcome_7d",               POItemCreationOutcome7Days),
     ("bpi2019", "po_item_invoice_receipt_outcome_7d",        POItemInvoiceReceiptOutcome7Days),
     ("bpi2019", "po_item_invoiced_net_worth_30d",            POItemInvoicedNetWorth30Days),
-    ("bpi2019", "po_item_time_to_clear_invoice",             POItemTimeToClearInvoice),
     ("bpi2019", "vendor_future_clear_invoice_item_count_7d", VendorFutureClearInvoiceItemCount7Days),
 
     # order_management — Order tasks

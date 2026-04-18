@@ -106,30 +106,6 @@ class POItemInvoicedNetWorth30Days(MEntityTask):
         return self._make_table(df)
 
 
-class POItemTimeToClearInvoice(MEntityTask):
-    """After invoice receipt, how many seconds until this PO item clears?"""
-
-    timedelta = pd.Timedelta(days=1)
-    source_max_age = pd.Timedelta(weeks=4)
-    task_type = TaskType.REGRESSION
-    object_types = ("POItem",)
-    metrics = [mae, mse, rmse, r2]
-    source_event_type = "Record Invoice Receipt"
-    target_event_type = "Clear Invoice"
-
-    @check_dbs
-    def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_time_to_target_event_table(
-            db=db,
-            object_type="POItem",
-            timestamps=timestamps,
-            source_event_type=self.source_event_type,
-            target_event_type=self.target_event_type,
-            source_max_age=self.source_max_age,
-        )
-        return self._make_table(df)
-
-
 class VendorFutureClearInvoiceItemCount7Days(MEntityTask):
     """How many distinct PO items from this vendor will clear invoices soon?"""
 
