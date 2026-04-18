@@ -8,7 +8,9 @@ from .utils import (
     Log1pZScoreTargetTransform,
     MEntityTask,
     build_stage_future_distinct_related_count_table,
+    build_stage_horizon_attribute_value_table,
     build_stage_multiclass_next_event_table,
+    build_stage_time_to_target_event_table,
 )
 
 
@@ -72,6 +74,57 @@ class POItemInvoiceReceiptOutcome7Days(MEntityTask):
             delta=self.timedelta,
             source_event_type=self.source_event_type,
             next_event_types=self.next_event_types,
+            source_max_age=self.source_max_age,
+        )
+        return self._make_table(df)
+
+
+class POItemInvoicedNetWorth30Days(MEntityTask):
+    """After PO item creation, what net worth will be invoiced within 30 days?"""
+
+    timedelta = pd.Timedelta(days=30)
+    source_max_age = timedelta
+    task_type = TaskType.REGRESSION
+    object_types = ("POItem",)
+    metrics = [mae, mse, rmse, r2]
+    source_event_type = "Create Purchase Order Item"
+    target_event_type = "Record Invoice Receipt"
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        df = build_stage_horizon_attribute_value_table(
+            db=db,
+            object_type="POItem",
+            attribute_table_name="event_attr_Record Invoice Receipt",
+            attribute_col="eCumNetWorth",
+            timestamps=timestamps,
+            delta=self.timedelta,
+            source_event_type=self.source_event_type,
+            target_event_type=self.target_event_type,
+            source_max_age=self.source_max_age,
+        )
+        return self._make_table(df)
+
+
+class POItemTimeToClearInvoice(MEntityTask):
+    """After invoice receipt, how many seconds until this PO item clears?"""
+
+    timedelta = pd.Timedelta(days=1)
+    source_max_age = pd.Timedelta(weeks=4)
+    task_type = TaskType.REGRESSION
+    object_types = ("POItem",)
+    metrics = [mae, mse, rmse, r2]
+    source_event_type = "Record Invoice Receipt"
+    target_event_type = "Clear Invoice"
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        df = build_stage_time_to_target_event_table(
+            db=db,
+            object_type="POItem",
+            timestamps=timestamps,
+            source_event_type=self.source_event_type,
+            target_event_type=self.target_event_type,
             source_max_age=self.source_max_age,
         )
         return self._make_table(df)

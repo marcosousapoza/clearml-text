@@ -6,7 +6,9 @@ from .process_targets import (
     build_stage_future_distinct_related_count_table,
     build_stage_future_event_count_table,
     build_stage_horizon_attribute_multiclass_table,
+    build_stage_horizon_attribute_value_table,
     build_stage_multiclass_next_event_table,
+    build_stage_time_to_target_event_table,
 )
 from .stage_transition import build_stage_transition_binary_table
 from .sql_fragments import (
@@ -29,7 +31,9 @@ __all__ = [
     "build_stage_future_distinct_related_count_table",
     "build_stage_future_event_count_table",
     "build_stage_horizon_attribute_multiclass_table",
+    "build_stage_horizon_attribute_value_table",
     "build_stage_multiclass_next_event_table",
+    "build_stage_time_to_target_event_table",
     "build_stage_transition_binary_table",
     "sql_event_type_filter",
     "sql_pair_obs_cartesian",

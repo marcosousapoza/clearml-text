@@ -75,6 +75,7 @@ class CustomerProductRepeatOrderWithin7Days(MEntityTask):
     """Observed customer-product pair: will it place another order within 7 days?"""
 
     timedelta = pd.Timedelta(days=7)
+    source_max_age = pd.Timedelta(weeks=4)
     task_type = TaskType.BINARY_CLASSIFICATION
     object_types = ("customers", "products")
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)
@@ -92,7 +93,7 @@ class CustomerProductRepeatOrderWithin7Days(MEntityTask):
             delta=self.timedelta,
             source_event_type=self.source_event_type,
             target_event_type=self.target_event_type,
-            source_max_age=None,
+            source_max_age=self.source_max_age,
         )
         return self._make_table(df)
 
@@ -101,6 +102,7 @@ class CustomerProductFutureOrderCount14Days(MEntityTask):
     """Observed customer-product pair: how many repeat orders arrive in 14 days?"""
 
     timedelta = pd.Timedelta(days=14)
+    source_max_age = pd.Timedelta(weeks=4)
     task_type = TaskType.REGRESSION
     object_types = ("customers", "products")
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)
@@ -121,6 +123,6 @@ class CustomerProductFutureOrderCount14Days(MEntityTask):
             delta=self.timedelta,
             source_event_type=self.source_event_type,
             target_event_type=self.target_event_type,
-            source_max_age=None,
+            source_max_age=self.source_max_age,
         )
         return self._make_table(df)

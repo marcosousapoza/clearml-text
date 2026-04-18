@@ -458,6 +458,161 @@ def build_observed_pair_future_event_count_table(
 
 
 @check_dbs
+def build_stage_horizon_attribute_value_table(
+    db: Database,
+    object_type: str,
+    attribute_table_name: str,
+    attribute_col: str,
+    timestamps: pd.Series,
+    source_event_type: str,
+    target_event_type: str,
+    delta: pd.Timedelta,
+    source_max_age: pd.Timedelta | None = None,
+) -> pd.DataFrame:
+    delta_seconds = int(delta.total_seconds())
+    object_type_sql = _sql_quote(object_type)
+    source_sql = _sql_quote(source_event_type)
+    target_sql = _sql_quote(target_event_type)
+    times_sorted = pd.to_datetime(timestamps).sort_values().unique()
+    recency_clause = _recency_clause("lbo", "last_time", source_max_age)
+
+    query = f"""
+    WITH typed_events AS (
+        SELECT
+            eo.{OBJECT_ID_COL},
+            e.{EVENT_ID_COL},
+            e.type,
+            e.{TIME_COL}
+        FROM event e
+        JOIN e2o eo ON eo.{EVENT_ID_COL} = e.{EVENT_ID_COL}
+        JOIN obj o ON o.{OBJECT_ID_COL} = eo.{OBJECT_ID_COL}
+        WHERE o.{OBJECT_TYPE_COL} = '{object_type_sql}'
+    ),
+    latest_before_obs AS (
+        SELECT
+            t.obs_time AS {TIME_COL},
+            te.{OBJECT_ID_COL},
+            te.type AS last_type,
+            te.{TIME_COL} AS last_time,
+            ROW_NUMBER() OVER (
+                PARTITION BY t.obs_time, te.{OBJECT_ID_COL}
+                ORDER BY te.{TIME_COL} DESC, te.{EVENT_ID_COL} DESC
+            ) AS rn
+        FROM times_df t
+        JOIN typed_events te
+          ON te.{TIME_COL} <= t.obs_time
+    ),
+    obs AS (
+        SELECT lbo.{OBJECT_ID_COL}, lbo.{TIME_COL}
+        FROM latest_before_obs lbo
+        WHERE lbo.rn = 1
+          AND lbo.last_type = '{source_sql}'
+          {recency_clause}
+    ),
+    first_target AS (
+        SELECT
+            obs.{OBJECT_ID_COL},
+            obs.{TIME_COL},
+            te.{EVENT_ID_COL},
+            ROW_NUMBER() OVER (
+                PARTITION BY obs.{OBJECT_ID_COL}, obs.{TIME_COL}
+                ORDER BY te.{TIME_COL}, te.{EVENT_ID_COL}
+            ) AS rn
+        FROM obs
+        JOIN typed_events te
+          ON te.{OBJECT_ID_COL} = obs.{OBJECT_ID_COL}
+         AND te.type = '{target_sql}'
+         AND te.{TIME_COL} > obs.{TIME_COL}
+         AND te.{TIME_COL} <= obs.{TIME_COL} + INTERVAL {delta_seconds} SECOND
+    )
+    SELECT
+        ft.{OBJECT_ID_COL},
+        ft.{TIME_COL},
+        CAST(attr.{attribute_col} AS DOUBLE) AS target
+    FROM first_target ft
+    JOIN attr_table attr ON attr.{EVENT_ID_COL} = ft.{EVENT_ID_COL}
+    WHERE ft.rn = 1
+    ORDER BY ft.{TIME_COL}, ft.{OBJECT_ID_COL}
+    """
+
+    with ocel_connection(db, times_sorted) as con:
+        con.register("attr_table", db.table_dict[attribute_table_name].df)
+        return con.execute(query).df()
+
+
+@check_dbs
+def build_stage_time_to_target_event_table(
+    db: Database,
+    object_type: str,
+    timestamps: pd.Series,
+    source_event_type: str,
+    target_event_type: str,
+    source_max_age: pd.Timedelta | None = None,
+) -> pd.DataFrame:
+    object_type_sql = _sql_quote(object_type)
+    source_sql = _sql_quote(source_event_type)
+    target_sql = _sql_quote(target_event_type)
+    times_sorted = pd.to_datetime(timestamps).sort_values().unique()
+    recency_clause = _recency_clause("lbo", "last_time", source_max_age)
+
+    query = f"""
+    WITH typed_events AS (
+        SELECT
+            eo.{OBJECT_ID_COL},
+            e.{EVENT_ID_COL},
+            e.type,
+            e.{TIME_COL}
+        FROM event e
+        JOIN e2o eo ON eo.{EVENT_ID_COL} = e.{EVENT_ID_COL}
+        JOIN obj o ON o.{OBJECT_ID_COL} = eo.{OBJECT_ID_COL}
+        WHERE o.{OBJECT_TYPE_COL} = '{object_type_sql}'
+    ),
+    latest_before_obs AS (
+        SELECT
+            t.obs_time AS {TIME_COL},
+            te.{OBJECT_ID_COL},
+            te.type AS last_type,
+            te.{TIME_COL} AS last_time,
+            ROW_NUMBER() OVER (
+                PARTITION BY t.obs_time, te.{OBJECT_ID_COL}
+                ORDER BY te.{TIME_COL} DESC, te.{EVENT_ID_COL} DESC
+            ) AS rn
+        FROM times_df t
+        JOIN typed_events te
+          ON te.{TIME_COL} <= t.obs_time
+    ),
+    obs AS (
+        SELECT lbo.{OBJECT_ID_COL}, lbo.{TIME_COL}
+        FROM latest_before_obs lbo
+        WHERE lbo.rn = 1
+          AND lbo.last_type = '{source_sql}'
+          {recency_clause}
+    ),
+    next_target AS (
+        SELECT
+            obs.{OBJECT_ID_COL},
+            obs.{TIME_COL},
+            MIN(te.{TIME_COL}) AS target_time
+        FROM obs
+        JOIN typed_events te
+          ON te.{OBJECT_ID_COL} = obs.{OBJECT_ID_COL}
+         AND te.type = '{target_sql}'
+         AND te.{TIME_COL} > obs.{TIME_COL}
+        GROUP BY obs.{OBJECT_ID_COL}, obs.{TIME_COL}
+    )
+    SELECT
+        {OBJECT_ID_COL},
+        {TIME_COL},
+        CAST(epoch(target_time) - epoch({TIME_COL}) AS DOUBLE) AS target
+    FROM next_target
+    ORDER BY {TIME_COL}, {OBJECT_ID_COL}
+    """
+
+    with ocel_connection(db, times_sorted) as con:
+        return con.execute(query).df()
+
+
+@check_dbs
 def build_stage_horizon_attribute_multiclass_table(
     db: Database,
     object_type: str,
@@ -465,11 +620,9 @@ def build_stage_horizon_attribute_multiclass_table(
     attribute_col: str,
     class_values: list[str],
     timestamps: pd.Series,
-    delta: pd.Timedelta,
     source_event_type: str,
     source_max_age: pd.Timedelta | None = None,
 ) -> pd.DataFrame:
-    delta_seconds = int(delta.total_seconds())
     object_type_sql = _sql_quote(object_type)
     source_sql = _sql_quote(source_event_type)
     class_list_sql = ", ".join(f"'{_sql_quote(value)}'" for value in class_values)
@@ -522,7 +675,7 @@ def build_stage_horizon_attribute_multiclass_table(
         FROM obs
         JOIN object_attr_values attr
           ON attr.{OBJECT_ID_COL} = obs.{OBJECT_ID_COL}
-         AND attr.{TIME_COL} <= obs.{TIME_COL} + INTERVAL {delta_seconds} SECOND
+         AND attr.{TIME_COL} <= obs.{TIME_COL}
         WHERE attr.{attribute_col} IN ({class_list_sql})
     )
     SELECT

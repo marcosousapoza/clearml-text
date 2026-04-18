@@ -173,7 +173,6 @@ class TransportDocumentStatusAfterOrder7Days(MEntityTask):
             attribute_col="Status",
             class_values=TD_STATUS_CLASSES,
             timestamps=timestamps,
-            delta=self.timedelta,
             source_event_type=self.source_event_type,
             source_max_age=None,
         )
@@ -184,6 +183,7 @@ class TransportDocumentVehicleDepartWithin7Days(MEntityTask):
     """Observed TD x Vehicle pair: will it co-depart within 7 days?"""
 
     timedelta = pd.Timedelta(days=7)
+    source_max_age = pd.Timedelta(weeks=4)
     task_type = TaskType.BINARY_CLASSIFICATION
     object_types = ("Transport Document", "Vehicle")
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)
@@ -201,7 +201,7 @@ class TransportDocumentVehicleDepartWithin7Days(MEntityTask):
             delta=self.timedelta,
             source_event_type=self.source_event_type,
             target_event_type=self.target_event_type,
-            source_max_age=None,
+            source_max_age=self.source_max_age,
         )
         return self._make_table(df)
 
@@ -210,6 +210,7 @@ class TransportDocumentContainerDepartWithin7Days(MEntityTask):
     """Observed TD x Container pair: will it co-depart within 7 days?"""
 
     timedelta = pd.Timedelta(days=7)
+    source_max_age = pd.Timedelta(weeks=4)
     task_type = TaskType.BINARY_CLASSIFICATION
     object_types = ("Transport Document", "Container")
     entity_cols = (O2O_SRC_COL, O2O_DST_COL)
@@ -227,6 +228,6 @@ class TransportDocumentContainerDepartWithin7Days(MEntityTask):
             delta=self.timedelta,
             source_event_type=self.source_event_type,
             target_event_type=self.target_event_type,
-            source_max_age=None,
+            source_max_age=self.source_max_age,
         )
         return self._make_table(df)

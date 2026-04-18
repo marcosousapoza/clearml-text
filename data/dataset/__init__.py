@@ -13,29 +13,36 @@ from ._datasets import (
     BPI2017,
 )
 
+DATASET_NAMES = (
+    "bpi2017",
+    "bpi2019",
+    "order_management",
+    "container_logistics",
+)
+
 
 def register_all_datasets(cache_root: str | Path | None = None) -> None:
     resolved_cache_root = configure_cache_environment(cache_root)
     get_dataset.cache_clear()
     register_dataset(
-        "bpi2017",
+        DATASET_NAMES[0],
         cast(Dataset, BPI2017),
-        cache_dir=str(resolved_cache_root / "bpi2017"),
+        cache_dir=str(resolved_cache_root / DATASET_NAMES[0]),
     )
     register_dataset(
-        "bpi2019",
+        DATASET_NAMES[1],
         cast(Dataset, BPI2019),
-        cache_dir=str(resolved_cache_root / "bpi2019"),
+        cache_dir=str(resolved_cache_root / DATASET_NAMES[1]),
     )
     register_dataset(
-        "order_management",
+        DATASET_NAMES[2],
         cast(Dataset, OrderManagementDataset),
-        cache_dir=str(resolved_cache_root / "order_management"),
+        cache_dir=str(resolved_cache_root / DATASET_NAMES[2]),
     )
     register_dataset(
-        "container_logistics",
+        DATASET_NAMES[3],
         cast(Dataset, ContainerLogisticsDataset),
-        cache_dir=str(resolved_cache_root / "container_logistics"),
+        cache_dir=str(resolved_cache_root / DATASET_NAMES[3]),
     )
 
 
