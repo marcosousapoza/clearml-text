@@ -137,9 +137,23 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         self._loader_dict = {}
         for split in ["train", "val", "test"]:
             table_input = split_inputs[split]
+            split_num_neighbors = num_neighbors
+            if split != "train":
+                # Make evaluation deterministic: use full historical
+                # neighborhoods, while still blocking label-node expansions
+                # beyond the seed hop to avoid leakage.
+                split_num_neighbors = {}
+                for et in data.edge_types:
+                    src, _, dst = et
+                    if dst.endswith("_labels"):
+                        split_num_neighbors[et] = [-1] + [0] * (self.num_layers - 1)
+                    elif src.endswith("_labels"):
+                        split_num_neighbors[et] = [0] * self.num_layers
+                    else:
+                        split_num_neighbors[et] = [-1] * self.num_layers
             self._loader_dict[split] = NeighborLoader(
                 data,
-                num_neighbors=num_neighbors,
+                num_neighbors=split_num_neighbors,
                 time_attr="time",
                 input_nodes=table_input.nodes,
                 input_time=table_input.time,
