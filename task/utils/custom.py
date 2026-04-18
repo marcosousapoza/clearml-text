@@ -11,8 +11,6 @@ from relbench.modeling.graph import (
     NodeTrainTableInput,
     to_unix_time,
 )
-from torch_frame import stype as TFStype
-
 from data.const import OBJECT_ID_COL, OBJECT_TABLE, TIME_COL
 from task.metrics import roc_auc
 from .transform import TargetTransform
@@ -101,11 +99,6 @@ class MEntityTask(BaseTask):
     object_types: tuple[str, ...]
     num_eval_timestamps: int = 1000 # very large number to generate all validation observations
 
-    # Kept for backwards compatibility with existing task declarations.
-    # Label tables are always registered without feature stypes so the target
-    # cannot be consumed as a node feature.
-    target_feature_stype: TFStype | None = None
-
     def make_target_transform(self) -> TargetTransform | None:
         return None
 
@@ -181,7 +174,7 @@ class MEntityTask(BaseTask):
                 continue
             if self.task_type == TaskType.MULTILABEL_CLASSIFICATION:
                 # pred is (N, K) logits or probabilities; threshold at 0.5 for hard metrics.
-                pred_bin = (pred > 0.5).astype(int)
+                pred_bin = (pred > 0.5).astype(int) # type: ignore
                 if metric_name == "f1":
                     results["multilabel_f1_macro"] = float(
                         skm.f1_score(target, pred_bin, average="macro", zero_division=0)
@@ -270,7 +263,8 @@ def add_task_to_database(
     Concatenates train/val/test DataFrames into a single label table,
     registers it in the database without exposing the target as a feature,
     then builds per-split NodeTrainTableInput objects with time-shifted
-    indices and optional target normalization.
+    indices and optional target normalization. Targets are kept out of the
+    graph table entirely to avoid label leakage through node features.
     """
 
     def target_tensor(df: pd.DataFrame) -> torch.Tensor:
@@ -307,18 +301,6 @@ def add_task_to_database(
 
     label_feature_df = label_df.drop(columns=[task.target_col])
     col_to_stype_dict[labels_table_name] = {}
-    if task.task_type == TaskType.MULTILABEL_CLASSIFICATION:
-        label_feature_df[task.target_col] = list(target_tensor(label_df).numpy())
-        col_to_stype_dict[labels_table_name][task.target_col] = TFStype.embedding
-    elif task.task_type in {
-        TaskType.BINARY_CLASSIFICATION,
-        TaskType.MULTICLASS_CLASSIFICATION,
-        TaskType.REGRESSION,
-    }:
-        label_feature_df[task.target_col] = label_df[task.target_col].astype(float)
-        col_to_stype_dict[labels_table_name][task.target_col] = (
-            task.target_feature_stype or TFStype.numerical
-        )
 
     db.table_dict[labels_table_name] = Table(
         df=label_feature_df,
