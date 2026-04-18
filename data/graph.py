@@ -151,13 +151,4 @@ def make_ocel_graph(
             data = _drop_node_type(data, bridge_table)
             col_stats_dict.pop(bridge_table, None)
 
-    # Label nodes must be sinks: they receive from the object graph but must
-    # not send messages back into it. Removing label→object edges prevents
-    # objects from aggregating across label nodes of different timestamps,
-    # which would leak future targets back to the seed through the object hub.
-    label_node_types = {nt for nt in data.node_types if nt.endswith("_labels")}
-    leaky_edges = [et for et in data.edge_types if et[0] in label_node_types and et[2] != et[0]]
-    for et in leaky_edges:
-        del data[et]
-
     return data, col_stats_dict

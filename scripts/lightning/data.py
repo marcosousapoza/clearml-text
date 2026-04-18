@@ -119,7 +119,31 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         )
 
         task_node_type = f"{self.task_name}_labels"
-        num_neighbors = _build_num_neighbors(self.num_neighbors, self.num_layers)
+        hop_counts = _build_num_neighbors(self.num_neighbors, self.num_layers)
+        # For any edge whose destination is a label node (other than the seed
+        # itself), set neighbor count to 0. This prevents the object from
+        # aggregating over other label nodes of the same entity at different
+        # timestamps, which leaks future target information through the object hub.
+        # Block all edges that touch a label node except the seed-node
+        # self-connection.  Two directions must be blocked:
+        #   - src=labels → dst=other: a neighbour would aggregate from the label
+        #     node, which carries the attached target y, and pass that signal back
+        #     to the seed in the next hop.
+        #   - src=other  → dst=labels: a non-seed label node aggregates from
+        #     objects, enriching an object hub that the seed can then read.
+        def _is_label_leakage(et: tuple[str, str, str]) -> bool:
+            src, _, dst = et
+            src_is_label = src.endswith("_labels")
+            dst_is_label = dst.endswith("_labels")
+            # Allow the seed's self-connection (same label type, same node).
+            if src == dst and src_is_label:
+                return False
+            return src_is_label or dst_is_label
+
+        num_neighbors = {
+            et: ([0] * self.num_layers if _is_label_leakage(et) else hop_counts)
+            for et in data.edge_types
+        }
         self._loader_dict = {}
         for split in ["train", "val", "test"]:
             table_input = split_inputs[split]

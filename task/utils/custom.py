@@ -284,7 +284,6 @@ def add_task_to_database(
 
     for split in ["train", "val", "test"]:
         split_df = task.get_table(split, mask_input_cols=False).df.copy()
-        split_df[task.time_col] = split_df[task.time_col] + task.timedelta
         split_df = split_df.sort_values(task.time_col, kind="stable").reset_index(drop=True)
         split_frames[split] = split_df
 
