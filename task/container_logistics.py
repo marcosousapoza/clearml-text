@@ -6,7 +6,6 @@ from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
 from data.const import O2O_DST_COL, O2O_SRC_COL, OBJECT_TABLE
 from data.wrapper import check_dbs
 from .utils import (
-    Log1pZScoreTargetTransform,
     MEntityTask,
     build_observed_pair_event_within_table,
     build_stage_future_distinct_related_count_table,
@@ -79,9 +78,6 @@ class ContainerRemainingLoadTruckCount4Hours(MEntityTask):
     source_max_age = timedelta
     target_event_type = "Load Truck"
 
-    def make_target_transform(self):
-        return Log1pZScoreTargetTransform()
-
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
         df = build_stage_future_event_count_table(
@@ -106,9 +102,6 @@ class VehicleFutureContainerLoadCount7Days(MEntityTask):
     source_event_type = "Book Vehicles"
     target_event_type = "Load to Vehicle"
     related_object_type = "Container"
-
-    def make_target_transform(self):
-        return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
@@ -135,9 +128,6 @@ class TransportDocumentFutureDepartContainerCount7Days(MEntityTask):
     source_event_type = "Order Empty Containers"
     target_event_type = "Depart"
     related_object_type = "Container"
-
-    def make_target_transform(self):
-        return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:

@@ -5,7 +5,6 @@ from relbench.metrics import accuracy, f1, mae, mse, r2, rmse, roc_auc
 
 from data.wrapper import check_dbs
 from .utils import (
-    Log1pZScoreTargetTransform,
     MEntityTask,
     build_stage_future_event_count_table,
     build_stage_multiclass_next_event_table,
@@ -98,9 +97,6 @@ class ApplicationFutureValidationCount10Days(MEntityTask):
     source_event_type = "A_Incomplete"
     target_event_type = "A_Validating"
     source_max_age = timedelta
-
-    def make_target_transform(self):
-        return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:

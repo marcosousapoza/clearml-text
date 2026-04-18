@@ -6,7 +6,6 @@ from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
 from data.const import O2O_DST_COL, O2O_SRC_COL, OBJECT_TABLE
 from data.wrapper import check_dbs
 from .utils import (
-    Log1pZScoreTargetTransform,
     MEntityTask,
     build_observed_pair_event_within_table,
     build_observed_pair_future_event_count_table,
@@ -53,9 +52,6 @@ class OrderFutureReminderCount14Days(MEntityTask):
     source_event_type = "confirm order"
     target_event_type = "payment reminder"
     source_max_age = timedelta
-
-    def make_target_transform(self):
-        return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
@@ -110,9 +106,6 @@ class CustomerProductFutureOrderCount14Days(MEntityTask):
     metrics = [mae, mse, rmse, r2]
     source_event_type = "confirm order"
     target_event_type = "place order"
-
-    def make_target_transform(self):
-        return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:

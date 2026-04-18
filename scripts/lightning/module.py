@@ -9,7 +9,6 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from scripts.model import Model
 from task.utils import MEntityTask
-from task.utils.transform import TargetTransform
 
 from .data import DataArtifacts
 from .metrics import RelbenchEvalMetric, TaskSetup, build_task_setup
@@ -32,18 +31,17 @@ class EntityGNNLightningModule(LightningModule):
         col_stats_dict: dict | None = None,
         split_inputs: dict[str, Any] | None = None,
         task_node_type: str | None = None,
-        target_transform: TargetTransform | None = None,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(
-            ignore=["task", "data", "col_stats_dict", "split_inputs", "target_transform"],
+            ignore=["task", "data", "col_stats_dict", "split_inputs"],
         )
         self.lr = lr
         self.epochs = epochs
 
         if task is not None:
             assert data is not None and col_stats_dict is not None and task_node_type is not None
-            self._init_from_artifacts(task, data, col_stats_dict, task_node_type, target_transform)
+            self._init_from_artifacts(task, data, col_stats_dict, task_node_type)
 
     def configure_from_artifacts(self, artifacts: DataArtifacts) -> None:
         """Deferred initialisation called by LightningCLI after datamodule.setup()."""
@@ -52,7 +50,6 @@ class EntityGNNLightningModule(LightningModule):
             artifacts.data,
             artifacts.col_stats_dict,
             artifacts.task_node_type,
-            artifacts.target_transform,
         )
 
     def _init_from_artifacts(
@@ -61,7 +58,6 @@ class EntityGNNLightningModule(LightningModule):
         data: Any,
         col_stats_dict: dict,
         task_node_type: str,
-        target_transform: TargetTransform | None,
     ) -> None:
         hparams = self.hparams
         self.task = task
@@ -82,8 +78,8 @@ class EntityGNNLightningModule(LightningModule):
             hgt_heads=hparams["hgt_heads"],
         )
 
-        self.val_metric = RelbenchEvalMetric(task, "val", task_setup, target_transform)
-        self.test_metric = RelbenchEvalMetric(task, "test", task_setup, target_transform)
+        self.val_metric = RelbenchEvalMetric(task, "val", task_setup)
+        self.test_metric = RelbenchEvalMetric(task, "test", task_setup)
 
         # Register loss weight as a buffer so Lightning moves it to the correct device automatically
         loss_weight = getattr(task_setup.loss_fn, "weight", None)

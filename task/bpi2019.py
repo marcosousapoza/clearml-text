@@ -5,7 +5,6 @@ from relbench.metrics import accuracy, f1, mae, mse, r2, rmse, roc_auc
 
 from data.wrapper import check_dbs
 from .utils import (
-    Log1pZScoreTargetTransform,
     MEntityTask,
     build_stage_future_distinct_related_count_table,
     build_stage_horizon_attribute_value_table,
@@ -117,9 +116,6 @@ class VendorFutureClearInvoiceItemCount7Days(MEntityTask):
     target_event_type = "Clear Invoice"
     related_object_type = "POItem"
     source_max_age = timedelta
-
-    def make_target_transform(self):
-        return Log1pZScoreTargetTransform()
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:

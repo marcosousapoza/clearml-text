@@ -18,7 +18,6 @@ from relbench.modeling.utils import get_stype_proposal
 from relbench.tasks import get_task
 from scripts.text_embedder import SentenceTextEmbedding
 from task.utils import MEntityTask, add_task_to_database
-from task.utils.transform import TargetTransform
 
 
 def _build_num_neighbors(num_neighbors_base: int, num_layers: int) -> list[int]:
@@ -48,7 +47,6 @@ class DataArtifacts:
     split_inputs: dict
     cache_root: Path
     task_node_type: str
-    target_transform: TargetTransform | None
 
 
 class RelbenchLightningDataModule(L.LightningDataModule):
@@ -105,7 +103,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         if hasattr(dataset, "set_stype"):
             col_to_stype_dict = dataset.set_stype(col_to_stype_dict)  # type: ignore[attr-defined]
 
-        db, split_inputs, target_transform = add_task_to_database(db, task, self.task_name, col_to_stype_dict)
+        db, split_inputs = add_task_to_database(db, task, self.task_name, col_to_stype_dict)
         if self.flatten:
             db.reindex_pkeys_and_fkeys()
         graph_cache_name = f"{self.dataset_name}_{self.task_name}{'_flat' if self.flatten else ''}"
@@ -148,7 +146,6 @@ class RelbenchLightningDataModule(L.LightningDataModule):
             split_inputs=split_inputs,
             cache_root=cache_root,
             task_node_type=task_node_type,
-            target_transform=target_transform,
         )
 
     def train_dataloader(self) -> NeighborLoader:

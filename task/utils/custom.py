@@ -13,7 +13,6 @@ from relbench.modeling.graph import (
 )
 from data.const import OBJECT_ID_COL, OBJECT_TABLE, TIME_COL
 from task.metrics import roc_auc
-from .transform import TargetTransform
 
 
 # ---------------------------------------------------------------------------
@@ -98,9 +97,6 @@ class MEntityTask(BaseTask):
     task_type: TaskType
     object_types: tuple[str, ...]
     num_eval_timestamps: int = 1000 # very large number to generate all validation observations
-
-    def make_target_transform(self) -> TargetTransform | None:
-        return None
 
     def _make_table(self, df: pd.DataFrame) -> Table:
         """Wraps a result DataFrame in the standard RelBench Table shape.
@@ -257,7 +253,7 @@ def add_task_to_database(
     task: "MEntityTask",
     task_name: str,
     col_to_stype_dict: dict,
-) -> tuple[Any, dict[str, NodeTrainTableInput], TargetTransform | None]:
+) -> tuple[Any, dict[str, NodeTrainTableInput]]:
     """Add one MEntityTask's label table to the database and return split inputs.
 
     Concatenates train/val/test DataFrames into a single label table,
@@ -308,10 +304,6 @@ def add_task_to_database(
         pkey_col=None,
         time_col=task.time_col,
     )
-    target_transform = task.make_target_transform()
-    if target_transform is not None:
-        target_transform.fit(target_tensor(split_frames["train"]))
-
     split_inputs: dict[str, NodeTrainTableInput] = {}
     start = 0
     for split in ["train", "val", "test"]:
@@ -319,8 +311,6 @@ def add_task_to_database(
         stop = start + len(split_df)
         node_ids = torch.arange(start, stop, dtype=torch.long)
         target = target_tensor(split_df)
-        if target_transform is not None:
-            target = target_transform.transform(target)
         split_inputs[split] = NodeTrainTableInput(
             nodes=(labels_table_name, node_ids),
             time=torch.from_numpy(to_unix_time(split_df[task.time_col])),
@@ -329,4 +319,4 @@ def add_task_to_database(
         )
         start = stop
 
-    return db, split_inputs, target_transform
+    return db, split_inputs
