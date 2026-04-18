@@ -21,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--channels", type=int, default=64)
     parser.add_argument("--aggr", type=str, default="sum")
-    parser.add_argument("--num-layers", type=int, default=4)
+    parser.add_argument("--num-layers", type=int, default=3)
     parser.add_argument("--num-neighbors", type=int, default=16)
     parser.add_argument("--temporal_strategy", type=str, default="last")
     parser.add_argument("--gnn-type", type=str, default="sage", choices=["sage", "hgt"])
