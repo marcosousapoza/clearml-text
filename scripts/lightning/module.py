@@ -12,6 +12,7 @@ from task.utils import MEntityTask
 
 from .data import DataArtifacts
 from .metrics import RelbenchEvalMetric, TaskSetup, build_task_setup
+from .tuple import TupleConcatPredictor
 
 
 class EntityGNNLightningModule(LightningModule):
@@ -29,19 +30,24 @@ class EntityGNNLightningModule(LightningModule):
         task: MEntityTask | None = None,
         data: Any = None,
         col_stats_dict: dict | None = None,
-        split_inputs: dict[str, Any] | None = None,
-        task_node_type: str | None = None,
+        entity_table: str | None = None,
+        tuple_arity: int | None = None,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(
-            ignore=["task", "data", "col_stats_dict", "split_inputs"],
+            ignore=["task", "data", "col_stats_dict"],
         )
         self.lr = lr
         self.epochs = epochs
 
         if task is not None:
-            assert data is not None and col_stats_dict is not None and task_node_type is not None
-            self._init_from_artifacts(task, data, col_stats_dict, task_node_type)
+            assert (
+                data is not None
+                and col_stats_dict is not None
+                and entity_table is not None
+                and tuple_arity is not None
+            )
+            self._init_from_artifacts(task, data, col_stats_dict, entity_table, tuple_arity)
 
     def configure_from_artifacts(self, artifacts: DataArtifacts) -> None:
         """Deferred initialisation called by LightningCLI after datamodule.setup()."""
@@ -49,7 +55,8 @@ class EntityGNNLightningModule(LightningModule):
             artifacts.task,
             artifacts.data,
             artifacts.col_stats_dict,
-            artifacts.task_node_type,
+            artifacts.entity_table,
+            artifacts.tuple_arity,
         )
 
     def _init_from_artifacts(
@@ -57,25 +64,32 @@ class EntityGNNLightningModule(LightningModule):
         task: MEntityTask,
         data: Any,
         col_stats_dict: dict,
-        task_node_type: str,
+        entity_table: str,
+        tuple_arity: int,
     ) -> None:
         hparams = self.hparams
         self.task = task
-        self.task_node_type = task_node_type
+        self.entity_table = entity_table
+        self.tuple_arity = tuple_arity
 
         task_setup: TaskSetup = build_task_setup(task)
         self.task_setup = task_setup
 
+        channels = hparams["channels"]
         self.model = Model(
             data=data,
             col_stats_dict=col_stats_dict,
             num_layers=hparams["num_layers"],
-            channels=hparams["channels"],
-            out_channels=task_setup.out_channels,
+            channels=channels,
             aggr=hparams["aggr"],
-            norm="batch_norm",
             gnn_type=hparams["gnn_type"],
             hgt_heads=hparams["hgt_heads"],
+        )
+        self.predictor = TupleConcatPredictor(
+            hidden_dim=channels,
+            tuple_arity=tuple_arity,
+            out_dim=task_setup.out_channels,
+            hidden_dims=(channels, max(channels // 2, 1)),
         )
 
         self.val_metric = RelbenchEvalMetric(task, "val", task_setup)
@@ -99,12 +113,13 @@ class EntityGNNLightningModule(LightningModule):
         return "max" if self.task_setup.higher_is_better else "min"
 
     def forward(self, batch: Any) -> Tensor:
-        return self.model(batch, self.task_node_type)
+        node_embeddings = self.model(batch, self.entity_table)
+        return self.predictor(node_embeddings, batch[self.entity_table])
 
     def training_step(self, batch: Any, batch_idx: int) -> Tensor:
         raw_pred = self(batch)
         pred = raw_pred.view(-1) if raw_pred.dim() > 1 and raw_pred.size(1) == 1 else raw_pred
-        target = batch[self.task_node_type].y
+        target = batch[self.entity_table].tuple_y
         if self.task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
             loss = self.task_setup.loss_fn(pred, target.long())
         else:
@@ -115,7 +130,7 @@ class EntityGNNLightningModule(LightningModule):
     def validation_step(self, batch: Any, batch_idx: int) -> None:
         raw_pred = self(batch)
         pred = raw_pred.view(-1) if raw_pred.dim() > 1 and raw_pred.size(1) == 1 else raw_pred
-        target = batch[self.task_node_type].y
+        target = batch[self.entity_table].tuple_y
         if self.task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
             loss = self.task_setup.loss_fn(pred, target.long())
         else:
@@ -137,7 +152,7 @@ class EntityGNNLightningModule(LightningModule):
     def test_step(self, batch: Any, batch_idx: int) -> None:
         raw_pred = self(batch)
         pred = raw_pred.view(-1) if raw_pred.dim() > 1 and raw_pred.size(1) == 1 else raw_pred
-        target = batch[self.task_node_type].y
+        target = batch[self.entity_table].tuple_y
         if self.task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
             loss = self.task_setup.loss_fn(pred, target.long())
         else:

@@ -248,6 +248,22 @@ class MEntityTask(BaseTask):
 # Training table helper
 # ---------------------------------------------------------------------------
 
+def build_target_tensor(task: "MEntityTask", df: pd.DataFrame) -> torch.Tensor:
+    """Pack a split DataFrame's target column into the tensor shape the loss expects."""
+    if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
+        return torch.from_numpy(df[task.target_col].to_numpy(dtype=int, copy=True))
+    if task.task_type == TaskType.MULTILABEL_CLASSIFICATION:
+        # Multilabel targets may be stored as object arrays of np.ndarray
+        # or, after parquet round-trip, as string representations.
+        raw: np.ndarray = np.asarray(df[task.target_col].values)
+        if len(raw) > 0 and isinstance(raw[0], str):
+            raw = np.array([np.fromstring(r.strip("[]"), sep=" ") for r in raw], dtype=np.float32)
+        else:
+            raw = np.stack(raw).astype(np.float32) # type: ignore
+        return torch.from_numpy(raw)
+    return torch.from_numpy(df[task.target_col].to_numpy(dtype=float, copy=True))
+
+
 def add_task_to_database(
     db: Any,
     task: "MEntityTask",
@@ -262,22 +278,6 @@ def add_task_to_database(
     indices and optional target normalization. Targets are kept out of the
     graph table entirely to avoid label leakage through node features.
     """
-
-    def target_tensor(df: pd.DataFrame) -> torch.Tensor:
-        # Each task type needs labels packed differently for the loss function.
-        if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
-            return torch.from_numpy(df[task.target_col].to_numpy(dtype=int, copy=True))
-        if task.task_type == TaskType.MULTILABEL_CLASSIFICATION:
-            # Multilabel targets may be stored as object arrays of np.ndarray
-            # or, after parquet round-trip, as string representations.
-            # Normalise to a float32 array in both cases.
-            raw: np.ndarray = np.asarray(df[task.target_col].values)
-            if len(raw) > 0 and isinstance(raw[0], str):
-                raw = np.array([np.fromstring(r.strip("[]"), sep=" ") for r in raw], dtype=np.float32)
-            else:
-                raw = np.stack(raw).astype(np.float32) # type: ignore
-            return torch.from_numpy(raw)
-        return torch.from_numpy(df[task.target_col].to_numpy(dtype=float, copy=True))
 
     labels_table_name = f"{task_name}_labels"
     split_frames: dict[str, pd.DataFrame] = {}
@@ -309,7 +309,7 @@ def add_task_to_database(
         split_df = split_frames[split]
         stop = start + len(split_df)
         node_ids = torch.arange(start, stop, dtype=torch.long)
-        target = target_tensor(split_df)
+        target = build_target_tensor(task, split_df)
         split_inputs[split] = NodeTrainTableInput(
             nodes=(labels_table_name, node_ids),
             time=torch.from_numpy(to_unix_time(split_df[task.time_col])),

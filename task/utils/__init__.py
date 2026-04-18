@@ -1,4 +1,4 @@
-from .custom import MEntityTask, add_task_to_database
+from .custom import MEntityTask, add_task_to_database, build_target_tensor
 from .db_utils import ocel_connection
 from .process_targets import (
     build_observed_pair_event_within_table,
@@ -24,6 +24,7 @@ from .window_counts import build_window_event_counts, counts_to_target
 __all__ = [
     "MEntityTask",
     "add_task_to_database",
+    "build_target_tensor",
     "ocel_connection",
     "build_observed_pair_event_within_table",
     "build_observed_pair_future_event_count_table",

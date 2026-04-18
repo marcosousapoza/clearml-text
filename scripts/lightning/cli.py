@@ -76,8 +76,8 @@ def main(argv: list[str] | None = None) -> None:
         task=datamodule.artifacts.task,
         data=datamodule.artifacts.data,
         col_stats_dict=datamodule.artifacts.col_stats_dict,
-        split_inputs=datamodule.artifacts.split_inputs,
-        task_node_type=datamodule.artifacts.task_node_type,
+        entity_table=datamodule.artifacts.entity_table,
+        tuple_arity=datamodule.artifacts.tuple_arity,
     )
 
     run_name = f"{args.dataset}_{args.task}{'_flat' if args.flatten else ''}"
