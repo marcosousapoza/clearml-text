@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Train entity-task GNNs with PyTorch Lightning.")
     parser.add_argument("--dataset", type=str, default="rel-event")
     parser.add_argument("--task", type=str, default="user-attendance")
-    parser.add_argument("--lr", type=float, default=0.005)
+    parser.add_argument("--lr", type=float, default=0.02)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--channels", type=int, default=64)

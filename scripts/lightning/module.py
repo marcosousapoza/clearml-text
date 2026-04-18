@@ -177,7 +177,7 @@ class EntityGNNLightningModule(LightningModule):
             optimizer,
             mode=self.checkpoint_mode,  # type: ignore[arg-type]
             factor=0.5,
-            patience=5,
+            patience=10,
             min_lr=1e-6,
         )
         return {
