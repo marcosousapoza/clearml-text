@@ -1,7 +1,11 @@
 import argparse
 import json
 
-from .core import configure_baseline_environment, evaluate_dataset
+from .core import (
+    DEFAULT_BASELINE_SEEDS,
+    configure_baseline_environment,
+    evaluate_dataset_across_seeds,
+)
 from .tables import print_baseline_tables
 
 
@@ -30,6 +34,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Task name to evaluate. Repeat to select multiple tasks. Defaults to all registered tasks.",
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--seeds",
+        nargs="+",
+        type=int,
+        default=DEFAULT_BASELINE_SEEDS,
+        help="Seeds to evaluate for baseline runs. Defaults to 1 2 3 4 5.",
+    )
     parser.add_argument("--wandb", action="store_true", help="Also log metrics to Weights & Biases.")
     parser.add_argument("--wandb-project", type=str, default="ocel-ocp")
     return parser
@@ -48,13 +59,13 @@ def main() -> None:
     configure_baseline_environment(seed=args.seed)
     dataset_names = args.dataset or ["order_management"]
     summaries = [
-        evaluate_dataset(
+        evaluate_dataset_across_seeds(
             dataset_name,
-            args.task,
-            seed=args.seed,
+            args.task or None,
+            seeds=args.seeds,
             wandb_project=args.wandb_project if args.wandb else None,
         )
         for dataset_name in dataset_names
     ]
-    summary = summaries[0] if len(summaries) == 1 else {"seed": args.seed, "datasets": summaries}
+    summary = summaries[0] if len(summaries) == 1 else {"seeds": args.seeds, "datasets": summaries}
     print(json.dumps(summary, indent=2, sort_keys=True))

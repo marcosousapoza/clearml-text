@@ -26,6 +26,7 @@ LEAKY_BASELINES = {
     "entity_median",
     "entity_majority_multiclass",
 }
+DEFAULT_BASELINE_SEEDS = [1, 2, 3, 4, 5]
 
 
 def default_dataset_names() -> list[str]:
@@ -39,9 +40,13 @@ def configure_baseline_environment(
     resolved_cache_root = configure_cache_environment()
     register_all_datasets(resolved_cache_root)
     register_tasks(resolved_cache_root)
+    set_baseline_seed(seed)
+    return resolved_cache_root
+
+
+def set_baseline_seed(seed: int) -> None:
     seed_everything(seed)
     np.random.seed(seed)
-    return resolved_cache_root
 
 
 def resolve_task_names(dataset_name: str, task_names: list[str], all_tasks: bool = False) -> list[str]:
@@ -84,24 +89,22 @@ def multiclass_width(task: MEntityTask, train_table: Table, pred_table: Table) -
     return width
 
 
+def metric_name_for_logging(task_type: TaskType, metric_name: str) -> str:
+    if task_type == TaskType.MULTICLASS_CLASSIFICATION:
+        return {
+            "f1": "multiclass_f1",
+            "roc_auc": "multiclass_roc_auc",
+        }.get(metric_name, metric_name)
+    if task_type == TaskType.MULTILABEL_CLASSIFICATION:
+        return {
+            "f1": "multilabel_f1_macro",
+            "accuracy": "multilabel_accuracy",
+        }.get(metric_name, metric_name)
+    return metric_name
+
+
 def metric_names_for_logging(task: MEntityTask) -> list[str]:
-    metric_names: list[str] = []
-    for fn in task.metrics:
-        metric_name = fn.__name__
-        if task.task_type == TaskType.MULTICLASS_CLASSIFICATION and metric_name == "f1":
-            metric_names.append("multiclass_f1")
-            continue
-        if task.task_type == TaskType.MULTICLASS_CLASSIFICATION and metric_name == "roc_auc":
-            metric_names.append("multiclass_roc_auc")
-            continue
-        if task.task_type == TaskType.MULTILABEL_CLASSIFICATION and metric_name == "f1":
-            metric_names.append("multilabel_f1_macro")
-            continue
-        if task.task_type == TaskType.MULTILABEL_CLASSIFICATION and metric_name == "accuracy":
-            metric_names.append("multilabel_accuracy")
-            continue
-        metric_names.append(metric_name)
-    return metric_names
+    return [metric_name_for_logging(task.task_type, fn.__name__) for fn in task.metrics]
 
 
 def log_baseline_to_wandb(
@@ -118,7 +121,7 @@ def log_baseline_to_wandb(
 ) -> None:
     import wandb
 
-    run_name = f"{dataset_name}_{task_name}_{baseline_name}"
+    run_name = f"{dataset_name}_{task_name}_{baseline_name}_seed{seed}"
     run_dir = cache_root / dataset_name / task_name / "baseline" / baseline_name
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -131,7 +134,7 @@ def log_baseline_to_wandb(
     run = wandb.init(
         project=wandb_project,
         name=run_name,
-        group=f"{dataset_name}_{task_name}",
+        group=f"{dataset_name}_{task_name}_{baseline_name}",
         job_type="baseline",
         dir=str(run_dir),
         config={
@@ -233,6 +236,17 @@ def predict_baseline(
     raise ValueError(f"Unknown baseline {name!r}.")
 
 
+def split_tables(task: MEntityTask) -> dict[str, tuple[Table, Table]]:
+    train_table = task.get_table("train")
+    val_table = task.get_table("val")
+    test_table = task.get_table("test")
+    return {
+        "train": (train_table, train_table),
+        "val": (train_table, val_table),
+        "test": (combine_train_val_table(train_table, val_table), test_table),
+    }
+
+
 def classification_roc_auc(target: np.ndarray, pred: np.ndarray) -> float:
     if pred.ndim == 1 or pred.shape[1] == 1:
         return float(skm.roc_auc_score(target, pred))
@@ -325,10 +339,9 @@ def evaluate_task(
     if not isinstance(task, MEntityTask):
         raise TypeError(f"Task {task_name!r} is not an MEntityTask.")
 
-    train_table = task.get_table("train")
-    val_table = task.get_table("val")
-    test_table = task.get_table("test")
-    trainval_table = combine_train_val_table(train_table, val_table)
+    splits = split_tables(task)
+    train_table, val_table = splits["train"][0], splits["val"][1]
+    test_table = splits["test"][1]
 
     results: dict[str, Any] = {
         "task_type": str(task.task_type),
@@ -339,29 +352,11 @@ def evaluate_task(
     }
 
     for name in baseline_names(task):
-        train_scores = evaluate_split(
-            task,
-            train_table,
-            train_table,
-            name,
-        )
-        val_scores = evaluate_split(
-            task,
-            train_table,
-            val_table,
-            name,
-        )
-        test_scores = evaluate_split(
-            task,
-            trainval_table,
-            test_table,
-            name,
-        )
-        results["baselines"][name] = {
-            "train": train_scores,
-            "val": val_scores,
-            "test": test_scores,
+        baseline_scores = {
+            split: evaluate_split(task, split_train, split_pred, name)
+            for split, (split_train, split_pred) in splits.items()
         }
+        results["baselines"][name] = baseline_scores
         if wandb_project is not None:
             if cache_root is None:
                 raise ValueError("cache_root is required when wandb logging is enabled.")
@@ -372,12 +367,91 @@ def evaluate_task(
                 baseline_name=name,
                 seed=seed,
                 task=task,
-                val_scores=val_scores,
-                test_scores=test_scores,
+                val_scores=baseline_scores["val"],
+                test_scores=baseline_scores["test"],
                 wandb_project=wandb_project,
             )
 
     return results
+
+
+def aggregate_metric_runs(score_runs: list[dict[str, float]]) -> dict[str, dict[str, float]]:
+    metric_names = sorted({metric_name for scores in score_runs for metric_name in scores})
+    aggregated: dict[str, dict[str, float]] = {}
+    for metric_name in metric_names:
+        values = np.array(
+            [float(scores[metric_name]) for scores in score_runs if metric_name in scores],
+            dtype=float,
+        )
+        aggregated[metric_name] = {
+            "mean": float(np.nanmean(values)) if values.size else float("nan"),
+            "std": float(np.nanstd(values)) if values.size else float("nan"),
+        }
+    return aggregated
+
+
+def evaluate_task_across_seeds(
+    dataset_name: str,
+    task_name: str,
+    *,
+    seeds: list[int],
+    cache_root: Path | None = None,
+    wandb_project: str | None = None,
+) -> dict[str, Any]:
+    if not seeds:
+        raise ValueError("seeds must contain at least one value.")
+
+    task_runs = []
+    for seed in seeds:
+        set_baseline_seed(seed)
+        task_runs.append({
+            "seed": seed,
+            **evaluate_task(
+                dataset_name=dataset_name,
+                task_name=task_name,
+                seed=seed,
+                cache_root=cache_root,
+                wandb_project=wandb_project,
+            ),
+        })
+
+    first_run = task_runs[0]
+    aggregated_baselines = {}
+    for baseline_name in first_run["baselines"]:
+        baseline_runs = [{
+            "seed": int(task_run["seed"]),
+            **{
+                split: dict(task_run["baselines"][baseline_name][split])
+                for split in ("train", "val", "test")
+            },
+        } for task_run in task_runs]
+        aggregated_baselines[baseline_name] = {
+            "runs": baseline_runs,
+            "aggregate": {
+                split: aggregate_metric_runs([dict(run[split]) for run in baseline_runs])
+                for split in ("train", "val", "test")
+            },
+        }
+
+    return {
+        "task_type": first_run["task_type"],
+        "train_rows": int(first_run["train_rows"]),
+        "val_rows": int(first_run["val_rows"]),
+        "test_rows": int(first_run["test_rows"]),
+        "baselines": aggregated_baselines,
+    }
+
+
+def prepare_dataset_evaluation(
+    dataset_name: str,
+    task_names: list[str] | None = None,
+    *,
+    all_tasks: bool = False,
+) -> tuple[list[str], Path]:
+    resolved_task_names = resolve_task_names(dataset_name, task_names or [], all_tasks=all_tasks)
+    dataset = get_dataset(dataset_name, download=False)
+    dataset.get_db()
+    return resolved_task_names, configure_cache_environment()
 
 
 def evaluate_dataset(
@@ -388,10 +462,11 @@ def evaluate_dataset(
     seed: int = 42,
     wandb_project: str | None = None,
 ) -> dict[str, Any]:
-    resolved_task_names = resolve_task_names(dataset_name, task_names or [], all_tasks=all_tasks)
-    dataset = get_dataset(dataset_name, download=False)
-    dataset.get_db()
-    cache_root = configure_cache_environment()
+    resolved_task_names, cache_root = prepare_dataset_evaluation(
+        dataset_name,
+        task_names,
+        all_tasks=all_tasks,
+    )
 
     summary: dict[str, Any] = {
         "dataset": dataset_name,
@@ -405,6 +480,42 @@ def evaluate_dataset(
             dataset_name=dataset_name,
             task_name=task_name,
             seed=seed,
+            cache_root=cache_root,
+            wandb_project=wandb_project,
+        )
+    return summary
+
+
+def evaluate_dataset_across_seeds(
+    dataset_name: str,
+    task_names: list[str] | None = None,
+    *,
+    all_tasks: bool = False,
+    seeds: list[int] | None = None,
+    wandb_project: str | None = None,
+) -> dict[str, Any]:
+    resolved_task_names, cache_root = prepare_dataset_evaluation(
+        dataset_name,
+        task_names,
+        all_tasks=all_tasks,
+    )
+    selected_seeds = seeds or DEFAULT_BASELINE_SEEDS
+
+    summary: dict[str, Any] = {
+        "dataset": dataset_name,
+        "seeds": selected_seeds,
+        "tasks": {},
+    }
+
+    for task_name in resolved_task_names:
+        print(
+            f"Running baseline for {dataset_name}/{task_name} across seeds {selected_seeds}...",
+            file=sys.stderr,
+        )
+        summary["tasks"][task_name] = evaluate_task_across_seeds(
+            dataset_name=dataset_name,
+            task_name=task_name,
+            seeds=selected_seeds,
             cache_root=cache_root,
             wandb_project=wandb_project,
         )

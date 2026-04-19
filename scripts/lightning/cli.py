@@ -32,6 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--devices", type=str, default="auto")
     parser.add_argument("--default-root-dir", type=str, default=None)
     parser.add_argument("--flatten", action="store_true")
+    parser.add_argument("--max-train-samples", type=int, default=30000,
+                        help="Cap training samples per epoch (0 = no cap).")
     parser.add_argument("--wandb", action="store_true", help="Also log metrics to Weights & Biases.")
     parser.add_argument("--wandb-project", type=str, default="ocel-ocp")
     return parser
@@ -96,12 +98,17 @@ def main(argv: list[str] | None = None) -> None:
         save_top_k=1,
         save_last=True,
     )
+    if args.max_train_samples > 0:
+        limit_train_batches = max(1, args.max_train_samples // args.batch_size)
+    else:
+        limit_train_batches = 1.0  # no cap — Lightning interprets 1.0 as 100%
+
     trainer = Trainer(
         accelerator=args.accelerator,
         devices=args.devices,
         precision="32-true",
         max_epochs=args.epochs,
-        limit_train_batches=2000,
+        limit_train_batches=limit_train_batches,
         num_sanity_val_steps=0,
         default_root_dir=str(root_dir),
         logger=loggers,

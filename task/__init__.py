@@ -29,7 +29,7 @@ from .bpi2017 import (
 )
 from .bpi2019 import (
     POItemNextEvent,
-    PONextSRMEvent,
+    POItemNextChangeEvent,
     POItemNextTime,
     PONextTime,
     POItemRemainingTime,
@@ -69,7 +69,7 @@ TASK_SPECS = [
     ("bpi2017", "application_offer_pair",       ApplicationOfferPairInteraction),
     # bpi2019 (8 tasks)
     ("bpi2019", "po_item_next_event",       POItemNextEvent),
-    ("bpi2019", "po_next_srm_event",        PONextSRMEvent),
+    ("bpi2019", "po_item_next_change_event", POItemNextChangeEvent),
     ("bpi2019", "po_item_next_time",        POItemNextTime),
     ("bpi2019", "po_next_time",             PONextTime),
     ("bpi2019", "po_item_remaining_time",   POItemRemainingTime),

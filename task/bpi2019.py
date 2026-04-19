@@ -75,19 +75,17 @@ _POITEM_OPERATIONAL_EVENTS = [
     "Record Service Entry Sheet",
 ]
 
-# SRM lifecycle events for a PO
-_SRM_EVENTS = [
-    "SRM: Created",
-    "SRM: Awaiting Approval",
-    "SRM: Ordered",
-    "SRM: In Transfer to Execution Syst.",
-    "SRM: Change was Transmitted",
-    "SRM: Complete",
-    "SRM: Document Completed",
-    "SRM: Transaction Completed",
-    "SRM: Incomplete",
-    "SRM: Held",
-    "SRM: Deleted",
+# Change/amendment events for a POItem — frequent, dense, good signal
+_POITEM_CHANGE_EVENTS = [
+    "Create Purchase Order Item",
+    "Change Price",
+    "Change Quantity",
+    "Change Delivery Indicator",
+    "Change Final Invoice Indicator",
+    "Change Rejection Indicator",
+    "Change Storage Location",
+    "Change payment term",
+    "Change Approval for Purchase Order",
 ]
 
 # Blocking / cancellation events used for the binary within-window task
@@ -113,7 +111,7 @@ _POITEM_VENDOR_EVENTS = [
 # Shared window presets
 # ---------------------------------------------------------------------------
 
-_BACK_30  = pd.Timedelta(days=30)
+_BACK_7   = pd.Timedelta(days=7)
 _FWD_14   = pd.Timedelta(days=14)
 _FWD_30   = pd.Timedelta(days=30)
 _DELTA    = pd.Timedelta(days=7)
@@ -147,37 +145,40 @@ class POItemNextEvent(MEntityTask):
             object_type = "POItem",
             times       = timestamps,
             event_types = _POITEM_OPERATIONAL_EVENTS,
-            delta_back  = _BACK_30,
+            delta_back  = _BACK_7,
             delta_fwd   = _FWD_14,
         )
         return to_relbench_table(df, self.entity_cols, self.entity_tables)
 
 
 # ---------------------------------------------------------------------------
-# Task 2 — PO: next SRM event classification
+# Task 2 — POItem: next change/amendment event classification
 #
-# Business meaning : After recent SRM activity on a purchase order, which of
-#                    the 11 SRM lifecycle states occurs next?
-# Signal           : SRM states follow a linear approval-to-completion path;
-#                    the current SRM state is highly predictive of the next.
+# Business meaning : After recent activity on a PO item, which of the 9
+#                    change or amendment events (price, quantity, approval,
+#                    etc.) occurs next?  Flags items mid-amendment so
+#                    procurement staff can anticipate the next modification.
+# Signal           : Items that just had a price change are more likely to
+#                    receive a quantity or approval change next; the sequence
+#                    of amendment types is predictable.
 # ---------------------------------------------------------------------------
 
-class PONextSRMEvent(MEntityTask):
-    """Next SRM lifecycle event for an active PO (11-class)."""
+class POItemNextChangeEvent(MEntityTask):
+    """Next change/amendment event for an active PO item (9-class)."""
 
     timedelta    = _DELTA
     task_type    = TaskType.MULTICLASS_CLASSIFICATION
-    object_types = ("PO",)
-    num_classes  = len(_SRM_EVENTS)
+    object_types = ("POItem",)
+    num_classes  = len(_POITEM_CHANGE_EVENTS)
     metrics      = [accuracy, f1, roc_auc]
 
     def make_table(self, db: Database, timestamps: pd.Series) -> Table:
         df = build_next_event_table(
             db,
-            object_type = "PO",
+            object_type = "POItem",
             times       = timestamps,
-            event_types = _SRM_EVENTS,
-            delta_back  = _BACK_30,
+            event_types = _POITEM_CHANGE_EVENTS,
+            delta_back  = _BACK_7,
             delta_fwd   = _FWD_14,
         )
         return to_relbench_table(df, self.entity_cols, self.entity_tables)
@@ -206,7 +207,7 @@ class POItemNextTime(MEntityTask):
             db,
             object_type = "POItem",
             times       = timestamps,
-            delta_back  = _BACK_30,
+            delta_back  = _BACK_7,
             delta_fwd   = _FWD_30,
         )
         return to_relbench_table(df, self.entity_cols, self.entity_tables)
@@ -235,7 +236,7 @@ class PONextTime(MEntityTask):
             db,
             object_type = "PO",
             times       = timestamps,
-            delta_back  = _BACK_30,
+            delta_back  = _BACK_7,
             delta_fwd   = _FWD_30,
         )
         return to_relbench_table(df, self.entity_cols, self.entity_tables)
@@ -264,7 +265,7 @@ class POItemRemainingTime(MEntityTask):
             db,
             object_type = "POItem",
             times       = timestamps,
-            delta_back  = _BACK_30,
+            delta_back  = _BACK_7,
         )
         return to_relbench_table(df, self.entity_cols, self.entity_tables)
 
@@ -292,7 +293,7 @@ class PORemainingTime(MEntityTask):
             db,
             object_type = "PO",
             times       = timestamps,
-            delta_back  = _BACK_30,
+            delta_back  = _BACK_7,
         )
         return to_relbench_table(df, self.entity_cols, self.entity_tables)
 
@@ -323,7 +324,7 @@ class POItemBlockedWithin14d(MEntityTask):
             object_type        = "POItem",
             times              = timestamps,
             target_event_types = _BLOCK_CANCEL_EVENTS,
-            delta_back         = _BACK_30,
+            delta_back         = _BACK_7,
             delta_fwd          = _FWD_14,
         )
         return to_relbench_table(df, self.entity_cols, self.entity_tables)
@@ -360,7 +361,7 @@ class POItemVendorPairInteraction(MEntityTask):
             dst_type                = "Vendor",
             times                   = timestamps,
             interaction_event_types = _POITEM_VENDOR_EVENTS,
-            delta_back              = _BACK_30,
+            delta_back              = _BACK_7,
             delta_fwd               = _FWD_14,
             pair_col                = _PAIR_COL,
         )

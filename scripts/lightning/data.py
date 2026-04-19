@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import lightning as L
+import pandas as pd
 import torch
 from relbench.base import Table
 from relbench.base import TaskType
@@ -66,6 +67,47 @@ def _ensure_attribute_table_pkeys(db) -> None:
         )
 
 
+def _capture_pkey_mapping(db) -> dict[str, pd.Series]:
+    """Capture old->new primary-key mappings after an in-place reindex."""
+    original_pkeys: dict[str, pd.Series] = {}
+    for table_name, table in db.table_dict.items():
+        if table.pkey_col is None:
+            continue
+        original_pkeys[table_name] = table.df[table.pkey_col].copy()
+
+    db.reindex_pkeys_and_fkeys()
+
+    mappings: dict[str, pd.Series] = {}
+    for table_name, old_values in original_pkeys.items():
+        new_values = db.table_dict[table_name].df[db.table_dict[table_name].pkey_col]  # type: ignore[index]
+        mappings[table_name] = pd.Series(new_values.to_numpy(), index=old_values.to_numpy())
+    return mappings
+
+
+def _remap_entity_columns(
+    split_df: pd.DataFrame,
+    task: MEntityTask,
+    pkey_mappings: dict[str, pd.Series],
+) -> pd.DataFrame:
+    if not pkey_mappings:
+        return split_df
+
+    remapped = split_df.copy()
+    for entity_col, entity_table in zip(task.entity_cols, task.entity_tables):
+        mapping = pkey_mappings.get(entity_table)
+        if mapping is None:
+            continue
+        mapped = remapped[entity_col].map(mapping)
+        if mapped.isna().any():
+            missing = remapped.loc[mapped.isna(), entity_col].drop_duplicates().tolist()[:5]
+            raise ValueError(
+                f"Failed to remap entity column {entity_col!r} for flattened table "
+                f"{entity_table!r}. Missing ids include: {missing}"
+            )
+        remapped[entity_col] = mapped.astype("int64")
+    return remapped
+
+
 @dataclass
 class DataArtifacts:
     dataset: Dataset
@@ -120,9 +162,10 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         # at its observation time, so this avoids horizon truncation without
         # exposing future rows to earlier examples.
         db = dataset.get_db(upto_test_timestamp=False)
+        pkey_mappings: dict[str, pd.Series] = {}
         if self.flatten:
             db = flatten_db(db, task.object_types)
-
+            pkey_mappings = _capture_pkey_mapping(db)
         col_to_stype_dict = get_stype_proposal(db)
         col_to_stype_dict = {
             table_name: {
@@ -136,8 +179,6 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         if hasattr(dataset, "set_stype"):
             col_to_stype_dict = dataset.set_stype(col_to_stype_dict)  # type: ignore[attr-defined]
 
-        if self.flatten:
-            db.reindex_pkeys_and_fkeys()
         graph_cache_name = f"{self.dataset_name}_{self.task_name}{'_flat' if self.flatten else ''}"
         data, col_stats_dict = make_ocel_graph(
             db,
@@ -165,6 +206,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         self._loader_dict = {}
         for split in ["train", "val", "test"]:
             split_df = task.get_table(split, mask_input_cols=False).df
+            split_df = _remap_entity_columns(split_df, task, pkey_mappings)
             split_df = split_df.sort_values(task.time_col, kind="stable").reset_index(drop=True)
 
             input_nodes_tuple = [
@@ -198,6 +240,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
                 targets=targets,
                 time_attr="time",
                 temporal_strategy=self.temporal_strategy,
+                is_sorted=True,
                 disjoint=True,
                 batch_size=self.batch_size,
                 shuffle=shuffle,

@@ -13,10 +13,12 @@ the graph after the metapaths have been added.
 
 from typing import Any, Dict, Optional, Tuple
 
+import torch
 from torch_frame.config.text_embedder import TextEmbedderConfig
 from torch_frame.data.stats import StatType
 from torch_geometric.data import HeteroData
 from torch_geometric.transforms import AddMetaPaths
+from torch_geometric.sampler.utils import sort_csc
 
 from relbench.base import Database
 from relbench.modeling.graph import make_pkey_fkey_graph
@@ -70,6 +72,22 @@ def _drop_node_type(data: HeteroData, node_type: str) -> HeteroData:
         del data[et]
 
     del data[node_type]
+    return data
+
+
+def _sort_edges_for_temporal_sampling(data: HeteroData) -> HeteroData:
+    """Sort all edge types by destination, then source-node time when available."""
+    for edge_type in data.edge_types:
+        edge_index = data[edge_type].edge_index
+        if edge_index.numel() == 0:
+            continue
+
+        row, col = edge_index
+        src_type = edge_type[0]
+        src_time = data[src_type].time if "time" in data[src_type] else None
+        row, col, _ = sort_csc(row, col, src_node_time=src_time)
+        data[edge_type].edge_index = torch.stack([row, col], dim=0)
+
     return data
 
 
@@ -149,4 +167,5 @@ def make_ocel_graph(
             data = _drop_node_type(data, bridge_table)
             col_stats_dict.pop(bridge_table, None)
 
+    data = _sort_edges_for_temporal_sampling(data)
     return data, col_stats_dict

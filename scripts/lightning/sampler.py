@@ -321,8 +321,9 @@ class TupleNeighborLoader(DataLoader):
                 if edge is not None:
                     edge = edge.to(torch.long)
                     perm = self.node_sampler.edge_permutation
+                    edge_perm = perm.get(key) if perm is not None else None
                     batch[key].e_id = (
-                        perm[key][edge] if perm is not None and key in perm else edge
+                        edge_perm[edge] if edge_perm is not None else edge
                     )
 
             batch.set_value_dict("batch", out.batch)
