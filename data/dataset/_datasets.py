@@ -327,10 +327,11 @@ class BPI2019(OCELDataset):
         CC-BY 4.0
     """
 
-    # Split on event-count tertiles, keeping a shared sampling phase across
-    # train/val/test for downstream task timestamp grids.
-    val_timestamp = pd.Timestamp("2018-09-22 22:00:00")
-    test_timestamp = pd.Timestamp("2018-11-12 22:00:00")
+    # Split on POItem first-event times so new purchase-order items are
+    # distributed close to 70/15/15 across train/val/test while keeping a
+    # shared sampling phase for downstream task timestamp grids.
+    val_timestamp = pd.Timestamp("2018-08-31 15:00:00")
+    test_timestamp = pd.Timestamp("2018-10-29 15:00:00")
 
     _uri = "https://data.4tu.nl/file/46a7e15b-10c7-4ab2-988d-ee67d8ea515a/ae11f6ca-2824-407d-98ea-ec8bc456e714"
     _file_format = "json"
