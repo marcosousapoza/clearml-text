@@ -3,6 +3,7 @@ from pathlib import Path
 
 import lightning as L
 import torch
+from relbench.base import TaskType
 from torch_geometric.data import HeteroData
 from torch_frame.config.text_embedder import TextEmbedderConfig
 
@@ -143,7 +144,10 @@ class RelbenchLightningDataModule(L.LightningDataModule):
             sampler = None
             shuffle = split == "train"
 
-            if split == "train":
+            if split == "train" and task.task_type in (
+                TaskType.BINARY_CLASSIFICATION,
+                TaskType.MULTICLASS_CLASSIFICATION,
+            ):
                 try:
                     sampler = BalancedUnderSampler(targets, task.task_type)
                     shuffle = False
@@ -158,7 +162,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
                 targets=targets,
                 time_attr="time",
                 temporal_strategy=self.temporal_strategy,
-                disjoint=False,
+                disjoint=True,
                 batch_size=self.batch_size,
                 shuffle=shuffle,
                 sampler=sampler,
