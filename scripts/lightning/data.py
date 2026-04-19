@@ -83,7 +83,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         register_tasks(cache_root)
         dataset: Dataset = get_dataset(self.dataset_name, download=False)
         task: MEntityTask = get_task(self.dataset_name, self.task_name, download=False)  # type: ignore[assignment]
-        db = dataset.get_db()
+        db = dataset.get_db(upto_test_timestamp=False)
         if self.flatten:
             db = flatten_db(db, task.object_types)
 
