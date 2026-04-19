@@ -372,6 +372,9 @@ class BPI2019(OCELDataset):
             )
         return json_cache_dir
 
+    _window_start = pd.Timestamp("2018-01-01")
+    _window_end   = pd.Timestamp("2019-01-30")
+
     def make_db(self) -> Database:
         raw_db = parse_ocel_to_database(
             uri=self._uri,
@@ -379,9 +382,25 @@ class BPI2019(OCELDataset):
             dataset_name=self.__class__.__name__,
             pre_parse_fn=self._pre_parsing,
         )
-        # filter strange periods based on event time
-        db = from_event_time(raw_db, pd.Timestamp("2018-01-01"))
-        db = upto_event_time(db, pd.Timestamp("2019-01-30"))
+        # filter events to the active window
+        db = from_event_time(raw_db, self._window_start)
+        db = upto_event_time(db, self._window_end)
+
+        # Clamp object timestamps that pre-date the window (dirty placeholder
+        # dates like 1948 survive the event-based filter and would pull
+        # db.min_timestamp far into the past, generating hundreds of spurious
+        # train timestamps).
+        obj_table = db.table_dict["object"]
+        obj_df = obj_table.df.copy()
+        mask = obj_df["time"] < self._window_start
+        obj_df.loc[mask, "time"] = self._window_start
+        db.table_dict["object"] = Table(
+            df=obj_df,
+            fkey_col_to_pkey_table=obj_table.fkey_col_to_pkey_table,
+            pkey_col=obj_table.pkey_col,
+            time_col=obj_table.time_col,
+        )
+
         return _drop_attr_columns(db, self._drop_attr_cols)
 
     def set_stype(
