@@ -140,8 +140,10 @@ class ContainerLogisticsDataset(OCELDataset):
         >>> db = ds.get_db()
     """
 
-    val_timestamp = pd.Timestamp("2024-04-01 06:00:00")
-    test_timestamp = pd.Timestamp("2024-06-07 06:00:00")
+    # Split on event-count tertiles, keeping a shared sampling phase across
+    # train/val/test for downstream task timestamp grids.
+    val_timestamp = pd.Timestamp("2023-10-20 13:00:00")
+    test_timestamp = pd.Timestamp("2024-03-15 13:00:00")
 
     _uri = (
         "https://zenodo.org/records/18373888/files/container_logistics.json?download=1"
@@ -231,8 +233,10 @@ class OrderManagementDataset(OCELDataset):
         >>> db = ds.get_db()
     """
 
-    val_timestamp = pd.Timestamp("2024-01-18 06:00:00")
-    test_timestamp = pd.Timestamp("2024-03-20 06:00:00")
+    # Split on event-count tertiles, keeping a shared sampling phase across
+    # train/val/test for downstream task timestamp grids.
+    val_timestamp = pd.Timestamp("2023-08-14 11:00:00")
+    test_timestamp = pd.Timestamp("2023-12-01 11:00:00")
 
     _uri = "https://zenodo.org/records/8428112/files/order-management.json?download=1"
     _file_format = "json"
@@ -323,8 +327,10 @@ class BPI2019(OCELDataset):
         CC-BY 4.0
     """
 
-    val_timestamp = pd.Timestamp("2018-09-20 06:00:00")
-    test_timestamp = pd.Timestamp("2018-10-18 06:00:00")
+    # Split on event-count tertiles, keeping a shared sampling phase across
+    # train/val/test for downstream task timestamp grids.
+    val_timestamp = pd.Timestamp("2018-05-19 08:00:00")
+    test_timestamp = pd.Timestamp("2018-09-11 08:00:00")
 
     _uri = "https://data.4tu.nl/file/46a7e15b-10c7-4ab2-988d-ee67d8ea515a/ae11f6ca-2824-407d-98ea-ec8bc456e714"
     _file_format = "json"
@@ -418,8 +424,10 @@ class BPI2017(OCELDataset):
         CC-BY 4.0
     """
 
-    val_timestamp = pd.Timestamp("2016-09-28 06:00:00")
-    test_timestamp = pd.Timestamp("2016-11-25 06:00:00")
+    # Split on event-count tertiles, keeping a shared sampling phase across
+    # train/val/test for downstream task timestamp grids.
+    val_timestamp = pd.Timestamp("2016-05-26 12:00:00")
+    test_timestamp = pd.Timestamp("2016-09-14 12:00:00")
 
     _uri = "https://data.4tu.nl/file/6889ca3f-97cf-459a-b630-3b0b0d8664b5/5d5b9f89-7fa6-4c92-b6ac-04f854bdf92e"
     _file_format = "json"
