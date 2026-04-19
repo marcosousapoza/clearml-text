@@ -116,5 +116,5 @@ def main(argv: list[str] | None = None) -> None:
     best_path = checkpoint_callback.best_model_path or None
     if best_path:
         print(f"Best checkpoint: {best_path}")
-    if not args.fast_dev_run:
+    if not args.fast_dev_run and not args.skip_test:
         trainer.test(module, datamodule=datamodule, ckpt_path="best" if best_path else None)

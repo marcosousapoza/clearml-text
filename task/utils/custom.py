@@ -98,21 +98,8 @@ class MEntityTask(BaseTask):
     object_types: tuple[str, ...]
     num_eval_timestamps: int = 1000 # very large number to generate all validation observations
 
-    def _make_table(self, df: pd.DataFrame) -> Table:
-        """Wraps a result DataFrame in the standard RelBench Table shape.
-
-        All tasks share the same structure: no primary key, entity columns
-        pointing into the shared object table, and a shared time column.
-        """
-        return Table(
-            df=df,
-            fkey_col_to_pkey_table=dict(zip(self.entity_cols, self.entity_tables)),
-            pkey_col=None,
-            time_col=self.time_col,
-        )
-
     def filter_dangling_entities(self, table: Table) -> Table:
-        db = self.dataset.get_db()
+        db = self.dataset.get_db(upto_test_timestamp=False)
         filter_mask = pd.Series(False, index=table.df.index)
         for entity_col, entity_table in zip(self.entity_cols, self.entity_tables):
             num_entities = len(db.table_dict[entity_table])

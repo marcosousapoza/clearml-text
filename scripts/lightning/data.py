@@ -3,6 +3,7 @@ from pathlib import Path
 
 import lightning as L
 import torch
+from relbench.base import Table
 from relbench.base import TaskType
 from torch_geometric.data import HeteroData
 from torch_frame.config.text_embedder import TextEmbedderConfig
@@ -33,6 +34,36 @@ def _build_num_neighbors(num_neighbors_base: int, num_layers: int) -> list[int]:
         max(1, round(num_neighbors_base * (decay ** i)))
         for i in range(num_layers)
     ]
+
+
+def _ensure_attribute_table_pkeys(db) -> None:
+    """Give attribute tables a synthetic row primary key before graph building.
+
+    Full-horizon OCEL attribute tables often use sparse `object_id`/`event_id`
+    values as foreign keys and have no explicit primary key. RelBench's graph
+    builder expects node tables to have stable row-local ids, so we inject one.
+    """
+    for table_name, table in list(db.table_dict.items()):
+        if table.pkey_col is not None:
+            continue
+        if not (
+            table_name.startswith("object_attr_")
+            or table_name.startswith("event_attr_")
+        ):
+            continue
+
+        pkey_col = "__row_id__"
+        if pkey_col in table.df.columns:
+            continue
+
+        df = table.df.copy()
+        df.insert(0, pkey_col, range(len(df)))
+        db.table_dict[table_name] = Table(
+            df=df,
+            fkey_col_to_pkey_table=table.fkey_col_to_pkey_table,
+            pkey_col=pkey_col,
+            time_col=table.time_col,
+        )
 
 
 @dataclass
@@ -83,7 +114,12 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         register_tasks(cache_root)
         dataset: Dataset = get_dataset(self.dataset_name, download=False)
         task: MEntityTask = get_task(self.dataset_name, self.task_name, download=False)  # type: ignore[assignment]
-        db = dataset.get_db()
+        # Build the graph from the full database so validation/test observations
+        # can sample historical neighborhoods up to their own timestamps.
+        # The temporal sampler still restricts each example to data available
+        # at its observation time, so this avoids horizon truncation without
+        # exposing future rows to earlier examples.
+        db = dataset.get_db(upto_test_timestamp=False)
         if self.flatten:
             db = flatten_db(db, task.object_types)
 

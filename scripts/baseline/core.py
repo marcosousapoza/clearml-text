@@ -172,12 +172,22 @@ def classification_roc_auc(target: np.ndarray, pred: np.ndarray) -> float:
         return float(skm.roc_auc_score(target, pred))
 
     target = target.astype(int)
+    observed_labels = np.array([label for label in np.unique(target) if 0 <= label < pred.shape[1]])
+    if observed_labels.size < 2:
+        return float("nan")
+    if observed_labels.size == 2:
+        positive_label = int(observed_labels[-1])
+        return float(
+            skm.roc_auc_score(
+                (target == positive_label).astype(int),
+                pred[:, positive_label],
+            )
+        )
+
     max_label = int(target.max()) if len(target) else -1
     if max_label >= pred.shape[1]:
         pred = np.pad(pred, ((0, 0), (0, max_label + 1 - pred.shape[1])))
     labels = np.array([label for label in np.unique(target) if 0 <= label < pred.shape[1]])
-    if labels.size < 2:
-        return float("nan")
     indexed_labels = {label: idx for idx, label in enumerate(labels)}
     remapped_target = np.array([indexed_labels[label] for label in target], dtype=int)
     observed_pred = pred[:, labels]

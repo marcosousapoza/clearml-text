@@ -58,7 +58,7 @@ hf-xet==1.4.3
 hpack @ file:///home/conda/feedstock_root/build_artifacts/hpack_1737618293087/work
 httpcore==1.0.9
 httpx==0.28.1
-huggingface_hub==1.10.2
+huggingface_hub==1.11.0
 hyperframe @ file:///home/conda/feedstock_root/build_artifacts/hyperframe_1737618333194/work
 hypothesis==6.147.0
 idna @ file:///home/conda/feedstock_root/build_artifacts/idna_1760286409563/work
@@ -139,8 +139,8 @@ pure_eval @ file:///home/conda/feedstock_root/build_artifacts/pure_eval_17335694
 pyarrow==23.0.1
 pycosat @ file:///home/conda/feedstock_root/build_artifacts/pycosat_1757744658111/work
 pycparser @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_pycparser_1733195786/work
-pydantic==2.13.1
-pydantic_core==2.46.1
+pydantic==2.13.2
+pydantic_core==2.46.2
 pyg_lib==0.6.0+pt29cu128
 Pygments @ file:///home/conda/feedstock_root/build_artifacts/pygments_1750615794071/work
 PyJWT==2.12.1
