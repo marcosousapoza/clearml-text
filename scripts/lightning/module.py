@@ -21,11 +21,10 @@ class EntityGNNLightningModule(LightningModule):
         *,
         num_layers: int,
         channels: int,
-        aggr: str,
+        lr: float,
+        aggr: str = "sum",
         gnn_type: str = "sage",
         hgt_heads: int = 4,
-        lr: float,
-        epochs: int,
         # Artifact args — provided directly (HPO / old CLI) or via configure_from_artifacts() (LightningCLI)
         task: MEntityTask | None = None,
         data: Any = None,
@@ -38,7 +37,6 @@ class EntityGNNLightningModule(LightningModule):
             ignore=["task", "data", "col_stats_dict"],
         )
         self.lr = lr
-        self.epochs = epochs
 
         if task is not None:
             assert (

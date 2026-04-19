@@ -53,8 +53,8 @@ class RelbenchLightningDataModule(L.LightningDataModule):
         batch_size: int,
         num_layers: int,
         num_neighbors: int,
-        temporal_strategy: str,
-        num_workers: int,
+        temporal_strategy: str = "last",
+        num_workers: int = 0,
         cache_dir: str | None = None,
         flatten: bool = False,
     ) -> None:
