@@ -63,7 +63,7 @@ APP_OFFER_PAIR_EVENT_TYPES = [
 ]
 
 _LOOKBACK = pd.Timedelta(days=7)
-_FWD_NEXT = pd.Timedelta(days=7)
+_FWD_NEXT = pd.Timedelta(days=7, hours=8)
 _N_TIMESTAMPS = 40
 
 

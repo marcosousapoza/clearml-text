@@ -48,7 +48,7 @@ CUSTOMER_PRODUCT_PAIR_EVENT_TYPES = [
 ]
 
 _LOOKBACK = pd.Timedelta(days=14)
-_FWD_NEXT = pd.Timedelta(days=14)
+_FWD_NEXT = pd.Timedelta(days=1, hours=8)
 _N_TIMESTAMPS = 100
 
 

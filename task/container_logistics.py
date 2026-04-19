@@ -61,7 +61,7 @@ _N_TIMESTAMPS = 100
 class ContainerNextEvent(MEntityTask):
     """Next event type for an active container."""
 
-    timedelta           = pd.Timedelta(hours=12)
+    timedelta           = pd.Timedelta(hours=8)
     num_eval_timestamps = _N_TIMESTAMPS
     task_type           = TaskType.MULTICLASS_CLASSIFICATION
     object_types        = ("Container",)
@@ -84,7 +84,7 @@ class ContainerNextEvent(MEntityTask):
 class ContainerNextTime(MEntityTask):
     """Seconds until the next event for an active container."""
 
-    timedelta           = pd.Timedelta(hours=12)
+    timedelta           = pd.Timedelta(hours=8)
     num_eval_timestamps = _N_TIMESTAMPS
     task_type           = TaskType.REGRESSION
     object_types        = ("Container",)
@@ -104,7 +104,7 @@ class ContainerNextTime(MEntityTask):
 class ContainerRemainingTime(MEntityTask):
     """Days until the final event in an active container's lifecycle."""
 
-    timedelta           = pd.Timedelta(hours=12)
+    timedelta           = pd.Timedelta(hours=8)
     num_eval_timestamps = _N_TIMESTAMPS
     task_type           = TaskType.REGRESSION
     object_types        = ("Container",)
@@ -128,7 +128,7 @@ class ContainerRemainingTime(MEntityTask):
 class TransportDocumentNextEvent(MEntityTask):
     """Next event type for an active transport document."""
 
-    timedelta           = pd.Timedelta(days=7)
+    timedelta           = pd.Timedelta(days=1, hours=8)
     num_eval_timestamps = _N_TIMESTAMPS
     task_type           = TaskType.MULTICLASS_CLASSIFICATION
     object_types        = ("Transport Document",)
@@ -151,7 +151,7 @@ class TransportDocumentNextEvent(MEntityTask):
 class TransportDocumentNextTime(MEntityTask):
     """Seconds until the next event for an active transport document."""
 
-    timedelta           = pd.Timedelta(days=7)
+    timedelta           = pd.Timedelta(days=1, hours=1)
     num_eval_timestamps = _N_TIMESTAMPS
     task_type           = TaskType.REGRESSION
     object_types        = ("Transport Document",)
@@ -171,7 +171,7 @@ class TransportDocumentNextTime(MEntityTask):
 class TransportDocumentRemainingTime(MEntityTask):
     """Days until the final event in an active transport document's lifecycle."""
 
-    timedelta           = pd.Timedelta(days=7)
+    timedelta           = pd.Timedelta(days=1, hours=8)
     num_eval_timestamps = _N_TIMESTAMPS
     task_type           = TaskType.REGRESSION
     object_types        = ("Transport Document",)
@@ -195,7 +195,7 @@ class TransportDocumentRemainingTime(MEntityTask):
 class ContainerTDPairNextEvent(MEntityTask):
     """Next shared event type for an observed Container–Transport Document pair."""
 
-    timedelta           = pd.Timedelta(days=7)
+    timedelta           = pd.Timedelta(days=1, hours=8)
     num_eval_timestamps = _N_TIMESTAMPS
     task_type           = TaskType.MULTICLASS_CLASSIFICATION
     object_types        = ("Container", "Transport Document")
@@ -221,7 +221,7 @@ class ContainerTDPairNextEvent(MEntityTask):
 class ContainerTDPairNextTime(MEntityTask):
     """Seconds until the next shared event for an observed Container–Transport Document pair."""
 
-    timedelta           = pd.Timedelta(days=7)
+    timedelta           = pd.Timedelta(days=1, hours=8)
     num_eval_timestamps = _N_TIMESTAMPS
     task_type           = TaskType.REGRESSION
     object_types        = ("Container", "Transport Document")
