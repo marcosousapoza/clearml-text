@@ -45,6 +45,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--flatten", action="store_true", help="Flatten databases to each task's object types.")
     parser.add_argument("--accelerator", type=str, default=None, help="Accelerator override (e.g. cpu, gpu). Defaults to gpu if available, else cpu.")
+    parser.add_argument("--lr", type=float, default=None, help="Learning rate override. Defaults to the scripts.lightning default.")
+    parser.add_argument("--patience", type=int, default=None, help="Patience override for LR scheduling and early stopping. Defaults to the scripts.lightning default.")
     parser.add_argument("--epochs", type=int, default=None, help="Number of training epochs. Defaults to the scripts.lightning default.")
     parser.add_argument("--gnn-type", type=str, default="sage", choices=["sage", "hgt"], help="GNN backbone to use for every spawned training run.")
     parser.add_argument("--wandb", action="store_true", help="Also log metrics to Weights & Biases.")
@@ -62,6 +64,8 @@ def main(argv: list[str] | None = None) -> None:
         accelerator,
         set(args.dataset),
         args.flatten,
+        args.lr,
+        args.patience,
         args.epochs,
         args.gnn_type,
         args.wandb,
@@ -80,6 +84,8 @@ def _build_jobs(
     accelerator: str,
     datasets: set[str],
     flatten: bool,
+    lr: float | None = None,
+    patience: int | None = None,
     epochs: int | None = None,
     gnn_type: str = "sage",
     wandb: bool = False,
@@ -105,6 +111,8 @@ def _build_jobs(
                 accelerator,
                 seed,
                 flatten,
+                lr,
+                patience,
                 epochs,
                 gnn_type,
                 wandb,
@@ -170,6 +178,8 @@ def _build_command(
     accelerator: str,
     seed: int,
     flatten: bool,
+    lr: float | None = None,
+    patience: int | None = None,
     epochs: int | None = None,
     gnn_type: str = "sage",
     wandb: bool = False,
@@ -197,6 +207,10 @@ def _build_command(
     ]
     if epochs is not None:
         command.extend(["--epochs", str(epochs)])
+    if lr is not None:
+        command.extend(["--lr", str(lr)])
+    if patience is not None:
+        command.extend(["--patience", str(patience)])
     if flatten:
         command.append("--flatten")
     if accelerator == "gpu":

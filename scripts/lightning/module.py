@@ -22,6 +22,8 @@ class EntityGNNLightningModule(LightningModule):
         num_layers: int,
         channels: int,
         lr: float,
+        patience: int = 10,
+        min_lr: float = 1e-6,
         aggr: str = "sum",
         gnn_type: str = "sage",
         hgt_heads: int = 4,
@@ -37,6 +39,8 @@ class EntityGNNLightningModule(LightningModule):
             ignore=["task", "data", "col_stats_dict"],
         )
         self.lr = lr
+        self.patience = patience
+        self.min_lr = min_lr
 
         if task is not None:
             assert (
@@ -175,8 +179,8 @@ class EntityGNNLightningModule(LightningModule):
             optimizer,
             mode=self.checkpoint_mode,  # type: ignore[arg-type]
             factor=0.5,
-            patience=10,
-            min_lr=1e-6,
+            patience=self.patience,
+            min_lr=self.min_lr,
         )
         return {
             "optimizer": optimizer,
@@ -187,3 +191,9 @@ class EntityGNNLightningModule(LightningModule):
                 "frequency": 1,
             },
         }
+
+    def lr_scheduler_step(self, scheduler: Any, metric: Any) -> None:
+        scheduler.step(metric)
+        optimizer = scheduler.optimizer
+        if all(group["lr"] <= self.min_lr for group in optimizer.param_groups):
+            self.trainer.should_stop = True

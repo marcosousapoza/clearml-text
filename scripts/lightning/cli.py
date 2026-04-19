@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 from lightning.pytorch import Trainer
-from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
+from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger, WandbLogger, Logger
 from torch_geometric.seed import seed_everything
 
@@ -17,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset", type=str, default="rel-event")
     parser.add_argument("--task", type=str, default="user-attendance")
     parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--channels", type=int, default=48)
@@ -60,6 +61,7 @@ def main(argv: list[str] | None = None) -> None:
         channels=args.channels,
         gnn_type=args.gnn_type,
         lr=args.lr,
+        patience=args.patience,
         task=datamodule.artifacts.task,
         data=datamodule.artifacts.data,
         col_stats_dict=datamodule.artifacts.col_stats_dict,
@@ -103,12 +105,6 @@ def main(argv: list[str] | None = None) -> None:
         callbacks=[
             checkpoint_callback,
             LearningRateMonitor(logging_interval="epoch"),
-            EarlyStopping(
-                monitor=module.checkpoint_monitor,
-                mode=module.checkpoint_mode,
-                patience=10,
-                min_delta=0.0,
-            ),
         ],
         fast_dev_run=args.fast_dev_run,
         inference_mode=False,
