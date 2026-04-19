@@ -158,7 +158,7 @@ class RelbenchLightningDataModule(L.LightningDataModule):
                 targets=targets,
                 time_attr="time",
                 temporal_strategy=self.temporal_strategy,
-                disjoint=True,
+                disjoint=False,
                 batch_size=self.batch_size,
                 shuffle=shuffle,
                 sampler=sampler,
