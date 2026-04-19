@@ -80,7 +80,7 @@ class OrderNextEvent(MEntityTask):
 
 
 class OrderNextTime(MEntityTask):
-    """Seconds until the next event for an active order."""
+    """Days until the next event for an active order."""
 
     timedelta           = _FWD_NEXT
     num_eval_timestamps = _N_TIMESTAMPS
@@ -100,7 +100,7 @@ class OrderNextTime(MEntityTask):
 
 
 class OrderRemainingTime(MEntityTask):
-    """Days until the final event in an active order's lifecycle."""
+    """Weeks until the final event in an active order's lifecycle."""
 
     timedelta           = _FWD_NEXT
     num_eval_timestamps = _N_TIMESTAMPS
@@ -147,7 +147,7 @@ class ProductNextEvent(MEntityTask):
 
 
 class ProductNextTime(MEntityTask):
-    """Seconds until the next event for an active product."""
+    """Days until the next event for an active product."""
 
     timedelta           = _FWD_NEXT
     num_eval_timestamps = _N_TIMESTAMPS
@@ -167,7 +167,7 @@ class ProductNextTime(MEntityTask):
 
 
 class ProductRemainingTime(MEntityTask):
-    """Days until the final event in an active product's lifecycle."""
+    """Weeks until the final event in an active product's lifecycle."""
 
     timedelta           = _FWD_NEXT
     num_eval_timestamps = _N_TIMESTAMPS
@@ -217,7 +217,7 @@ class CustomerProductPairNextEvent(MEntityTask):
 
 
 class CustomerProductPairNextTime(MEntityTask):
-    """Seconds until the next shared event for an observed customer–product pair."""
+    """Days until the next shared event for an observed customer–product pair."""
 
     timedelta           = _FWD_NEXT
     num_eval_timestamps = _N_TIMESTAMPS

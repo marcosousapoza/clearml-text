@@ -103,7 +103,7 @@ class POItemNextEvent(MEntityTask):
 
 
 class POItemNextTime(MEntityTask):
-    """Seconds until the next event for an active purchase order item."""
+    """Days until the next event for an active purchase order item."""
 
     timedelta            = _FWD_NEXT
     num_eval_timestamps  = _N_TIMESTAMPS
@@ -123,7 +123,7 @@ class POItemNextTime(MEntityTask):
 
 
 class POItemRemainingTime(MEntityTask):
-    """Days until the final event in an active purchase order item's lifecycle."""
+    """Weeks until the final event in an active purchase order item's lifecycle."""
 
     timedelta            = _FWD_NEXT
     num_eval_timestamps  = _N_TIMESTAMPS
@@ -173,7 +173,7 @@ class POItemVendorPairNextEvent(MEntityTask):
 
 
 class POItemVendorPairNextTime(MEntityTask):
-    """Seconds until the next shared event for an observed POItem–Vendor pair."""
+    """Days until the next shared event for an observed POItem–Vendor pair."""
 
     timedelta            = _FWD_NEXT
     num_eval_timestamps  = _N_TIMESTAMPS

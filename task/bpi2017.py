@@ -77,7 +77,7 @@ class ApplicationNextEvent(MEntityTask):
 
 
 class ApplicationNextTime(MEntityTask):
-    """Seconds until the next event for an active loan application."""
+    """Days until the next event for an active loan application."""
 
     timedelta           = _FWD_NEXT
     num_eval_timestamps = _N_TIMESTAMPS
@@ -97,7 +97,7 @@ class ApplicationNextTime(MEntityTask):
 
 
 class ApplicationRemainingTime(MEntityTask):
-    """Days until the final event in an active loan application's lifecycle."""
+    """Weeks until the final event in an active loan application's lifecycle."""
 
     timedelta           = _FWD_NEXT
     num_eval_timestamps = _N_TIMESTAMPS
@@ -144,7 +144,7 @@ class OfferNextEvent(MEntityTask):
 
 
 class OfferNextTime(MEntityTask):
-    """Seconds until the next event for an active loan offer."""
+    """Days until the next event for an active loan offer."""
 
     timedelta           = _FWD_NEXT
     num_eval_timestamps = _N_TIMESTAMPS
@@ -164,7 +164,7 @@ class OfferNextTime(MEntityTask):
 
 
 class OfferRemainingTime(MEntityTask):
-    """Days until the final event in an active loan offer's lifecycle."""
+    """Weeks until the final event in an active loan offer's lifecycle."""
 
     timedelta           = _FWD_NEXT
     num_eval_timestamps = _N_TIMESTAMPS

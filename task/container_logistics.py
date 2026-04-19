@@ -82,7 +82,7 @@ class ContainerNextEvent(MEntityTask):
 
 
 class ContainerNextTime(MEntityTask):
-    """Seconds until the next event for an active container."""
+    """Days until the next event for an active container."""
 
     timedelta           = pd.Timedelta(hours=8)
     num_eval_timestamps = _N_TIMESTAMPS
@@ -102,7 +102,7 @@ class ContainerNextTime(MEntityTask):
 
 
 class ContainerRemainingTime(MEntityTask):
-    """Days until the final event in an active container's lifecycle."""
+    """Weeks until the final event in an active container's lifecycle."""
 
     timedelta           = pd.Timedelta(hours=8)
     num_eval_timestamps = _N_TIMESTAMPS
@@ -149,7 +149,7 @@ class TransportDocumentNextEvent(MEntityTask):
 
 
 class TransportDocumentNextTime(MEntityTask):
-    """Seconds until the next event for an active transport document."""
+    """Days until the next event for an active transport document."""
 
     timedelta           = pd.Timedelta(days=1, hours=1)
     num_eval_timestamps = _N_TIMESTAMPS
@@ -169,7 +169,7 @@ class TransportDocumentNextTime(MEntityTask):
 
 
 class TransportDocumentRemainingTime(MEntityTask):
-    """Days until the final event in an active transport document's lifecycle."""
+    """Weeks until the final event in an active transport document's lifecycle."""
 
     timedelta           = pd.Timedelta(days=1, hours=8)
     num_eval_timestamps = _N_TIMESTAMPS
@@ -219,7 +219,7 @@ class ContainerTDPairNextEvent(MEntityTask):
 
 
 class ContainerTDPairNextTime(MEntityTask):
-    """Seconds until the next shared event for an observed Container–Transport Document pair."""
+    """Days until the next shared event for an observed Container–Transport Document pair."""
 
     timedelta           = pd.Timedelta(days=1, hours=8)
     num_eval_timestamps = _N_TIMESTAMPS

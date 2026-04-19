@@ -5,12 +5,12 @@ small times_df, keeping intermediate join sizes bounded.
 
 Single-entity builders:
   build_generic_next_event_table      -> multiclass classification
-  build_generic_next_time_table       -> regression (seconds to next event)
-  build_generic_remaining_time_table  -> regression (days to last future event)
+  build_generic_next_time_table       -> regression (days to next event)
+  build_generic_remaining_time_table  -> regression (weeks to last future event)
 
 Pair builders (observed co-occurrences):
   build_generic_pair_next_event_table -> multiclass classification
-  build_generic_pair_next_time_table  -> regression (seconds to next shared event)
+  build_generic_pair_next_time_table  -> regression (days to next shared event)
 """
 
 import pandas as pd
@@ -139,7 +139,7 @@ def build_generic_next_time_table(
     times: pd.Series,
     delta_back: pd.Timedelta,
 ) -> pd.DataFrame:
-    """Regression: seconds until the next event, batched over timestamps."""
+    """Regression: days until the next event, batched over timestamps."""
     back_sec = int(delta_back.total_seconds())
     times_sorted = pd.to_datetime(times).sort_values().unique()
     obs_ctes = _single_obs_cte(object_type, back_sec)
@@ -157,7 +157,7 @@ def build_generic_next_time_table(
         GROUP BY obs.{OBJECT_ID_COL}, obs.{TIME_COL}
     )
     SELECT {OBJECT_ID_COL}, {TIME_COL},
-           CAST(epoch(next_time) - epoch({TIME_COL}) AS DOUBLE) AS target
+           CAST((epoch(next_time) - epoch({TIME_COL})) / 86400.0 AS DOUBLE) AS target
     FROM next_event
     ORDER BY {TIME_COL}, {OBJECT_ID_COL}
     """
@@ -177,7 +177,7 @@ def build_generic_remaining_time_table(
     times: pd.Series,
     delta_back: pd.Timedelta,
 ) -> pd.DataFrame:
-    """Regression: days until the last future event, batched over timestamps."""
+    """Regression: weeks until the last future event, batched over timestamps."""
     back_sec = int(delta_back.total_seconds())
     times_sorted = pd.to_datetime(times).sort_values().unique()
     obs_ctes = _single_obs_cte(object_type, back_sec)
@@ -195,7 +195,7 @@ def build_generic_remaining_time_table(
         GROUP BY obs.{OBJECT_ID_COL}, obs.{TIME_COL}
     )
     SELECT {OBJECT_ID_COL}, {TIME_COL},
-           CAST((epoch(last_time) - epoch({TIME_COL})) / 86400.0 AS DOUBLE) AS target
+           CAST((epoch(last_time) - epoch({TIME_COL})) / 604800.0 AS DOUBLE) AS target
     FROM last_event
     ORDER BY {TIME_COL}, {OBJECT_ID_COL}
     """
@@ -356,7 +356,7 @@ def build_generic_pair_next_time_table(
     times: pd.Series,
     delta_back: pd.Timedelta,
 ) -> pd.DataFrame:
-    """Regression: seconds until next shared event for observed pairs, batched."""
+    """Regression: days until next shared event for observed pairs, batched."""
     back_sec = int(delta_back.total_seconds())
     times_sorted = pd.to_datetime(times).sort_values().unique()
     obs_ctes = _pair_obs_cte(src_type, dst_type, back_sec)
@@ -376,7 +376,7 @@ def build_generic_pair_next_time_table(
         GROUP BY obs.src_id, obs.dst_id, obs.{TIME_COL}
     )
     SELECT src_id AS {O2O_SRC_COL}, dst_id AS {O2O_DST_COL}, {TIME_COL},
-           CAST(epoch(next_time) - epoch({TIME_COL}) AS DOUBLE) AS target
+           CAST((epoch(next_time) - epoch({TIME_COL})) / 86400.0 AS DOUBLE) AS target
     FROM next_shared
     ORDER BY {TIME_COL}, src_id, dst_id
     """
