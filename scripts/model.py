@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 import torch
 import torch_geometric
 from torch import Tensor
-from torch.nn import Embedding, ModuleDict, ModuleList
+from torch.nn import Dropout, Embedding, ModuleDict, ModuleList
 from torch_frame.data.stats import StatType
 from torch_geometric.data import HeteroData
 from torch_geometric.nn import HGTConv
@@ -34,6 +34,7 @@ class HeteroHGT(torch.nn.Module):
         channels: int,
         heads: int = 4,
         num_layers: int = 4,
+        dropout: float = 0.0,
     ):
         super().__init__()
         metadata = (node_types, edge_types)
@@ -45,6 +46,7 @@ class HeteroHGT(torch.nn.Module):
             ModuleDict({nt: LayerNorm(channels, mode="node") for nt in node_types})
             for _ in range(num_layers)
         ])
+        self.dropout = Dropout(dropout)
 
     def reset_parameters(self):
         for conv in self.convs:
@@ -62,9 +64,9 @@ class HeteroHGT(torch.nn.Module):
         for conv, norm_dict in zip(self.convs, self.norms):
             out = conv(x_dict, edge_index_dict)
             x_dict = {
-                nt: norm_dict[nt]( # type: ignore
+                nt: self.dropout(norm_dict[nt]( # type: ignore
                     out[nt] if (out.get(nt) is not None) else x_dict[nt]
-                ).relu()
+                ).relu())
                 for nt in x_dict
             }
         return x_dict
@@ -87,6 +89,7 @@ class Model(torch.nn.Module):
         aggr: str,
         gnn_type: str = "sage",
         hgt_heads: int = 4,
+        dropout: float = 0.0,
         shallow_list: List[NodeType] | None = None,
     ):
         super().__init__()
@@ -114,6 +117,7 @@ class Model(torch.nn.Module):
                 channels=channels,
                 heads=hgt_heads,
                 num_layers=num_layers,
+                dropout=dropout,
             )
         else:
             self.gnn = HeteroGraphSAGE(
@@ -124,6 +128,7 @@ class Model(torch.nn.Module):
                 num_layers=num_layers,
             )
 
+        self.dropout = Dropout(dropout)
         self.embedding_dict = ModuleDict(
             {
                 node: Embedding(data.num_nodes_dict[node], channels)
@@ -164,4 +169,4 @@ class Model(torch.nn.Module):
             num_sampled_edges_dict=batch.num_sampled_edges_dict,
         )
 
-        return x_dict[entity_table]
+        return self.dropout(x_dict[entity_table])

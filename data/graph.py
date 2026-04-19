@@ -11,8 +11,6 @@ would have given it only a ``__const__`` feature column), it is dropped from
 the graph after the metapaths have been added.
 """
 
-from __future__ import annotations
-
 from typing import Any, Dict, Optional, Tuple
 
 from torch_frame.config.text_embedder import TextEmbedderConfig

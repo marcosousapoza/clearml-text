@@ -164,7 +164,7 @@ def process_dataset(args: argparse.Namespace, dataset_name: str, cache_root: Pat
 
     cache_root.mkdir(parents=True, exist_ok=True)
     dataset = get_dataset(dataset_name, download=args.download)
-    db = dataset.get_db()
+    db = dataset.get_db(upto_test_timestamp=False)
     print(
         f"Cached dataset {dataset_name!r} with tables: "
         f"{', '.join(sorted(db.table_dict.keys()))}"

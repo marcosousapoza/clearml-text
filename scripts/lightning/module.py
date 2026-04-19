@@ -4,7 +4,7 @@ from lightning.pytorch import LightningModule
 from lightning.pytorch.utilities.types import OptimizerLRScheduler
 from relbench.base import TaskType
 from torch import Tensor
-from torch.optim import Adam
+from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from scripts.model import Model
@@ -27,6 +27,8 @@ class EntityGNNLightningModule(LightningModule):
         aggr: str = "sum",
         gnn_type: str = "sage",
         hgt_heads: int = 4,
+        dropout: float = 0.3,
+        weight_decay: float = 1e-4,
         # Artifact args — provided directly (HPO / old CLI) or via configure_from_artifacts() (LightningCLI)
         task: MEntityTask | None = None,
         data: Any = None,
@@ -41,6 +43,7 @@ class EntityGNNLightningModule(LightningModule):
         self.lr = lr
         self.patience = patience
         self.min_lr = min_lr
+        self.weight_decay = weight_decay
 
         if task is not None:
             assert (
@@ -86,12 +89,15 @@ class EntityGNNLightningModule(LightningModule):
             aggr=hparams["aggr"],
             gnn_type=hparams["gnn_type"],
             hgt_heads=hparams["hgt_heads"],
+            dropout=hparams["dropout"],
         )
         self.predictor = TupleConcatPredictor(
             hidden_dim=channels,
             tuple_arity=tuple_arity,
             out_dim=task_setup.out_channels,
-            hidden_dims=(channels, max(channels // 2, 1)),
+            hidden_dims=(channels,),
+            dropout=hparams["dropout"],
+            layer_norm=True,
         )
 
         self.val_metric = RelbenchEvalMetric(task, "val", task_setup)
@@ -174,7 +180,7 @@ class EntityGNNLightningModule(LightningModule):
         self.test_metric.reset()
 
     def configure_optimizers(self) -> OptimizerLRScheduler:
-        optimizer = Adam(self.parameters(), lr=self.lr)
+        optimizer = AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         scheduler = ReduceLROnPlateau(
             optimizer,
             mode=self.checkpoint_mode,  # type: ignore[arg-type]

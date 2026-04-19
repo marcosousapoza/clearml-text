@@ -16,21 +16,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Train entity-task GNNs with PyTorch Lightning.")
     parser.add_argument("--dataset", type=str, default="rel-event")
     parser.add_argument("--task", type=str, default="user-attendance")
-    parser.add_argument("--lr", type=float, default=0.01)
-    parser.add_argument("--patience", type=int, default=10)
-    parser.add_argument("--epochs", type=int, default=30)
-    parser.add_argument("--batch-size", type=int, default=128)
-    parser.add_argument("--channels", type=int, default=48)
+    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--patience", type=int, default=5)
+    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--batch-size", type=int, default=512)
+    parser.add_argument("--channels", type=int, default=64)
     parser.add_argument("--num-layers", type=int, default=3)
-    parser.add_argument("--num-neighbors", type=int, default=16)
+    parser.add_argument("--num-neighbors", type=int, default=12)
     parser.add_argument("--gnn-type", type=str, default="sage", choices=["sage", "hgt"])
+    parser.add_argument("--dropout", type=float, default=0.4)
+    parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--cache-dir", type=str, default=None)
     parser.add_argument("--accelerator", type=str, default="auto")
     parser.add_argument("--devices", type=str, default="auto")
     parser.add_argument("--default-root-dir", type=str, default=None)
     parser.add_argument("--flatten", action="store_true")
-    parser.add_argument("--fast-dev-run", action="store_true")
     parser.add_argument("--wandb", action="store_true", help="Also log metrics to Weights & Biases.")
     parser.add_argument("--wandb-project", type=str, default="ocel-ocp")
     return parser
@@ -62,6 +63,8 @@ def main(argv: list[str] | None = None) -> None:
         gnn_type=args.gnn_type,
         lr=args.lr,
         patience=args.patience,
+        dropout=args.dropout,
+        weight_decay=args.weight_decay,
         task=datamodule.artifacts.task,
         data=datamodule.artifacts.data,
         col_stats_dict=datamodule.artifacts.col_stats_dict,
@@ -106,7 +109,6 @@ def main(argv: list[str] | None = None) -> None:
             checkpoint_callback,
             LearningRateMonitor(logging_interval="epoch"),
         ],
-        fast_dev_run=args.fast_dev_run,
         inference_mode=False,
         log_every_n_steps=1,
     )
@@ -116,5 +118,4 @@ def main(argv: list[str] | None = None) -> None:
     best_path = checkpoint_callback.best_model_path or None
     if best_path:
         print(f"Best checkpoint: {best_path}")
-    if not args.fast_dev_run and not args.skip_test:
-        trainer.test(module, datamodule=datamodule, ckpt_path="best" if best_path else None)
+    trainer.test(module, datamodule=datamodule, ckpt_path="best" if best_path else None)
