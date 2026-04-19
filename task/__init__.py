@@ -13,8 +13,6 @@ from .bpi2017 import (
     OfferNextEvent,
     OfferNextTime,
     OfferRemainingTime,
-    ApplicationOfferPairNextEvent,
-    ApplicationOfferPairNextTime,
 )
 from .bpi2019 import (
     POItemNextEvent,
@@ -54,10 +52,6 @@ TASK_SPECS = (
     ("bpi2017", "offer_next_event",             OfferNextEvent),
     ("bpi2017", "offer_next_time",              OfferNextTime),
     ("bpi2017", "offer_remaining_time",         OfferRemainingTime),
-    # bpi2017 — Application × Offer pair
-    ("bpi2017", "application_offer_pair_next_event", ApplicationOfferPairNextEvent),
-    ("bpi2017", "application_offer_pair_next_time",  ApplicationOfferPairNextTime),
-
     # bpi2019 — POItem single-entity
     ("bpi2019", "po_item_next_event",           POItemNextEvent),
     ("bpi2019", "po_item_next_time",            POItemNextTime),
