@@ -84,6 +84,72 @@ def multiclass_width(task: MEntityTask, train_table: Table, pred_table: Table) -
     return width
 
 
+def metric_names_for_logging(task: MEntityTask) -> list[str]:
+    metric_names: list[str] = []
+    for fn in task.metrics:
+        metric_name = fn.__name__
+        if task.task_type == TaskType.MULTICLASS_CLASSIFICATION and metric_name == "f1":
+            metric_names.append("multiclass_f1")
+            continue
+        if task.task_type == TaskType.MULTICLASS_CLASSIFICATION and metric_name == "roc_auc":
+            metric_names.append("multiclass_roc_auc")
+            continue
+        if task.task_type == TaskType.MULTILABEL_CLASSIFICATION and metric_name == "f1":
+            metric_names.append("multilabel_f1_macro")
+            continue
+        if task.task_type == TaskType.MULTILABEL_CLASSIFICATION and metric_name == "accuracy":
+            metric_names.append("multilabel_accuracy")
+            continue
+        metric_names.append(metric_name)
+    return metric_names
+
+
+def log_baseline_to_wandb(
+    *,
+    cache_root: Path,
+    dataset_name: str,
+    task_name: str,
+    baseline_name: str,
+    seed: int,
+    task: MEntityTask,
+    val_scores: dict[str, float],
+    test_scores: dict[str, float],
+    wandb_project: str,
+) -> None:
+    import wandb
+
+    run_name = f"{dataset_name}_{task_name}_{baseline_name}"
+    run_dir = cache_root / dataset_name / task_name / "baseline" / baseline_name
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    metric_names = metric_names_for_logging(task)
+    metrics = {
+        **{f"val/{name}": float(val_scores[name]) for name in metric_names if name in val_scores},
+        **{f"test/{name}": float(test_scores[name]) for name in metric_names if name in test_scores},
+    }
+
+    run = wandb.init(
+        project=wandb_project,
+        name=run_name,
+        group=f"{dataset_name}_{task_name}",
+        job_type="baseline",
+        dir=str(run_dir),
+        config={
+            "dataset": dataset_name,
+            "task": task_name,
+            "baseline": baseline_name,
+            "seed": seed,
+            "task_type": str(task.task_type),
+        },
+        tags=["baseline", dataset_name, task_name, baseline_name],
+    )
+    try:
+        run.log(metrics)
+        run.summary.update(metrics)
+    finally:
+        run.finish()
+
+
 def predict_baseline(
     task: MEntityTask,
     train_table: Table,
@@ -250,6 +316,10 @@ def baseline_names(task: MEntityTask) -> list[str]:
 def evaluate_task(
     dataset_name: str,
     task_name: str,
+    *,
+    seed: int = 42,
+    cache_root: Path | None = None,
+    wandb_project: str | None = None,
 ) -> dict[str, Any]:
     task = get_task(dataset_name, task_name, download=False)
     if not isinstance(task, MEntityTask):
@@ -269,26 +339,43 @@ def evaluate_task(
     }
 
     for name in baseline_names(task):
+        train_scores = evaluate_split(
+            task,
+            train_table,
+            train_table,
+            name,
+        )
+        val_scores = evaluate_split(
+            task,
+            train_table,
+            val_table,
+            name,
+        )
+        test_scores = evaluate_split(
+            task,
+            trainval_table,
+            test_table,
+            name,
+        )
         results["baselines"][name] = {
-            "train": evaluate_split(
-                task,
-                train_table,
-                train_table,
-                name,
-            ),
-            "val": evaluate_split(
-                task,
-                train_table,
-                val_table,
-                name,
-            ),
-            "test": evaluate_split(
-                task,
-                trainval_table,
-                test_table,
-                name,
-            ),
+            "train": train_scores,
+            "val": val_scores,
+            "test": test_scores,
         }
+        if wandb_project is not None:
+            if cache_root is None:
+                raise ValueError("cache_root is required when wandb logging is enabled.")
+            log_baseline_to_wandb(
+                cache_root=cache_root,
+                dataset_name=dataset_name,
+                task_name=task_name,
+                baseline_name=name,
+                seed=seed,
+                task=task,
+                val_scores=val_scores,
+                test_scores=test_scores,
+                wandb_project=wandb_project,
+            )
 
     return results
 
@@ -299,10 +386,12 @@ def evaluate_dataset(
     *,
     all_tasks: bool = False,
     seed: int = 42,
+    wandb_project: str | None = None,
 ) -> dict[str, Any]:
     resolved_task_names = resolve_task_names(dataset_name, task_names or [], all_tasks=all_tasks)
     dataset = get_dataset(dataset_name, download=False)
     dataset.get_db()
+    cache_root = configure_cache_environment()
 
     summary: dict[str, Any] = {
         "dataset": dataset_name,
@@ -315,5 +404,8 @@ def evaluate_dataset(
         summary["tasks"][task_name] = evaluate_task(
             dataset_name=dataset_name,
             task_name=task_name,
+            seed=seed,
+            cache_root=cache_root,
+            wandb_project=wandb_project,
         )
     return summary

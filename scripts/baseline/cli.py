@@ -30,6 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Task name to evaluate. Repeat to select multiple tasks. Defaults to all registered tasks.",
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--wandb", action="store_true", help="Also log metrics to Weights & Biases.")
+    parser.add_argument("--wandb-project", type=str, default="ocel-ocp")
     return parser
 
 
@@ -50,6 +52,7 @@ def main() -> None:
             dataset_name,
             args.task,
             seed=args.seed,
+            wandb_project=args.wandb_project if args.wandb else None,
         )
         for dataset_name in dataset_names
     ]

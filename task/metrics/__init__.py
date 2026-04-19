@@ -8,15 +8,33 @@ from numpy.typing import NDArray
 
 
 def roc_auc(target: NDArray, pred: NDArray) -> float:
-    """Weighted per-class one-vs-rest ROC AUC for multiclass predictions.
+    """ROC AUC for binary or multiclass predictions.
 
-    Skips classes with no positives or no negatives (they have no meaningful
-    AUC), then returns a weighted average across remaining classes.
+    For binary tasks, ``pred`` may be a 1-D score vector or a two-column score
+    matrix; in the latter case the positive-class column is used. For
+    multiclass tasks, this computes a weighted one-vs-rest ROC AUC and skips
+    classes with no positives or no negatives.
     """
-    if pred.ndim <= 1 or pred.shape[1] <= 1:
-        raise ValueError("multiclass ROC AUC requires class prediction scores.")
-
     target = target.astype(np.int64, copy=False)
+
+    if pred.ndim == 1:
+        try:
+            return float(skm.roc_auc_score(target, pred))
+        except ValueError:
+            return float("nan")
+
+    if pred.shape[1] == 1:
+        try:
+            return float(skm.roc_auc_score(target, pred[:, 0]))
+        except ValueError:
+            return float("nan")
+
+    if pred.shape[1] == 2:
+        try:
+            return float(skm.roc_auc_score(target, pred[:, 1]))
+        except ValueError:
+            return float("nan")
+
     scores: list[float] = []
     weights: list[int] = []
     for label in range(pred.shape[1]):
