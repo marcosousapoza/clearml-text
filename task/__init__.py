@@ -7,69 +7,88 @@ from relbench.base import BaseTask
 from relbench.tasks import get_task, register_task
 
 from .bpi2017 import (
-    ApplicationFutureValidationCount10Days,
-    ApplicationIncompleteOutcome10Days,
-    ApplicationValidationOutcome7Days,
-    OfferSentOutcome10Days,
-    OfferReturnedOutcome10Days,
+    ApplicationNextEvent,
+    ApplicationNextTime,
+    ApplicationRemainingTime,
+    OfferNextEvent,
+    OfferNextTime,
+    OfferRemainingTime,
+    ApplicationOfferPairNextEvent,
+    ApplicationOfferPairNextTime,
 )
 from .bpi2019 import (
-    POItemCreationOutcome7Days,
-    POItemInvoiceReceiptOutcome7Days,
-    POItemInvoicedNetWorth30Days,
-    VendorFutureClearInvoiceItemCount7Days,
+    POItemNextEvent,
+    POItemNextTime,
+    POItemRemainingTime,
+    POItemVendorPairNextEvent,
+    POItemVendorPairNextTime,
 )
 from .container_logistics import (
-    ContainerLoadPhaseNextEvent4Hours,
-    ContainerRemainingLoadTruckCount4Hours,
-    TransportDocumentContainerDepartWithin7Days,
-    TransportDocumentFutureDepartContainerCount7Days,
-    TransportDocumentStatusAfterOrder7Days,
-    TransportDocumentVehicleDepartWithin7Days,
-    VehicleBookingNextEvent7Days,
-    VehicleFutureContainerLoadCount7Days,
+    ContainerNextEvent,
+    ContainerNextTime,
+    ContainerRemainingTime,
+    TransportDocumentNextEvent,
+    TransportDocumentNextTime,
+    TransportDocumentRemainingTime,
+    ContainerTDPairNextEvent,
+    ContainerTDPairNextTime,
 )
 from .order_management import (
-    CustomerProductFutureOrderCount14Days,
-    CustomerProductRepeatOrderWithin7Days,
-    OrderFutureReminderCount14Days,
-    OrderPaymentOutcome14Days,
+    OrderNextEvent,
+    OrderNextTime,
+    OrderRemainingTime,
+    ProductNextEvent,
+    ProductNextTime,
+    ProductRemainingTime,
+    CustomerProductPairNextEvent,
+    CustomerProductPairNextTime,
 )
 
 
 TASK_SPECS = (
-    # bpi2017 — Application tasks
-    ("bpi2017", "application_validation_outcome_7d",       ApplicationValidationOutcome7Days),
-    ("bpi2017", "application_incomplete_outcome_10d",      ApplicationIncompleteOutcome10Days),
-    ("bpi2017", "application_future_validation_count_10d", ApplicationFutureValidationCount10Days),
-    # bpi2017 — Offer tasks
-    ("bpi2017", "offer_sent_outcome_10d",                  OfferSentOutcome10Days),
-    ("bpi2017", "offer_returned_outcome_10d",              OfferReturnedOutcome10Days),
+    # bpi2017 — Application single-entity
+    ("bpi2017", "application_next_event",       ApplicationNextEvent),
+    ("bpi2017", "application_next_time",        ApplicationNextTime),
+    ("bpi2017", "application_remaining_time",   ApplicationRemainingTime),
+    # bpi2017 — Offer single-entity
+    ("bpi2017", "offer_next_event",             OfferNextEvent),
+    ("bpi2017", "offer_next_time",              OfferNextTime),
+    ("bpi2017", "offer_remaining_time",         OfferRemainingTime),
+    # bpi2017 — Application × Offer pair
+    ("bpi2017", "application_offer_pair_next_event", ApplicationOfferPairNextEvent),
+    ("bpi2017", "application_offer_pair_next_time",  ApplicationOfferPairNextTime),
 
-    # bpi2019 — POItem / Vendor tasks
-    ("bpi2019", "po_item_creation_outcome_7d",               POItemCreationOutcome7Days),
-    ("bpi2019", "po_item_invoice_receipt_outcome_7d",        POItemInvoiceReceiptOutcome7Days),
-    ("bpi2019", "po_item_invoiced_net_worth_30d",            POItemInvoicedNetWorth30Days),
-    ("bpi2019", "vendor_future_clear_invoice_item_count_7d", VendorFutureClearInvoiceItemCount7Days),
+    # bpi2019 — POItem single-entity
+    ("bpi2019", "po_item_next_event",           POItemNextEvent),
+    ("bpi2019", "po_item_next_time",            POItemNextTime),
+    ("bpi2019", "po_item_remaining_time",       POItemRemainingTime),
+    # bpi2019 — POItem × Vendor pair
+    ("bpi2019", "po_item_vendor_pair_next_event", POItemVendorPairNextEvent),
+    ("bpi2019", "po_item_vendor_pair_next_time",  POItemVendorPairNextTime),
 
-    # order_management — Order tasks
-    ("order_management", "order_payment_outcome_14d",               OrderPaymentOutcome14Days),
-    ("order_management", "order_future_reminder_count_14d",         OrderFutureReminderCount14Days),
-    # order_management — Pair tasks
-    ("order_management", "customer_product_repeat_order_7d",        CustomerProductRepeatOrderWithin7Days),
-    ("order_management", "customer_product_future_order_count_14d", CustomerProductFutureOrderCount14Days),
+    # order_management — orders single-entity
+    ("order_management", "order_next_event",          OrderNextEvent),
+    ("order_management", "order_next_time",           OrderNextTime),
+    ("order_management", "order_remaining_time",      OrderRemainingTime),
+    # order_management — products single-entity
+    ("order_management", "product_next_event",        ProductNextEvent),
+    ("order_management", "product_next_time",         ProductNextTime),
+    ("order_management", "product_remaining_time",    ProductRemainingTime),
+    # order_management — customers × products pair
+    ("order_management", "customer_product_pair_next_event", CustomerProductPairNextEvent),
+    ("order_management", "customer_product_pair_next_time",  CustomerProductPairNextTime),
 
-    # container_logistics — Container tasks
-    ("container_logistics", "container_load_phase_next_event_4h",         ContainerLoadPhaseNextEvent4Hours),
-    ("container_logistics", "container_remaining_load_truck_count_4h",    ContainerRemainingLoadTruckCount4Hours),
-    # container_logistics — Vehicle / Transport Document tasks
-    ("container_logistics", "vehicle_booking_next_event_7d",              VehicleBookingNextEvent7Days),
-    ("container_logistics", "vehicle_future_container_load_count_7d",     VehicleFutureContainerLoadCount7Days),
-    ("container_logistics", "transport_document_future_depart_container_count_7d", TransportDocumentFutureDepartContainerCount7Days),
-    ("container_logistics", "transport_document_status_after_order_7d",   TransportDocumentStatusAfterOrder7Days),
-    # container_logistics — Pair tasks
-    ("container_logistics", "transport_document_vehicle_depart_7d",       TransportDocumentVehicleDepartWithin7Days),
-    ("container_logistics", "transport_document_container_depart_7d",     TransportDocumentContainerDepartWithin7Days),
+    # container_logistics — Container single-entity
+    ("container_logistics", "container_next_event",       ContainerNextEvent),
+    ("container_logistics", "container_next_time",        ContainerNextTime),
+    ("container_logistics", "container_remaining_time",   ContainerRemainingTime),
+    # container_logistics — Transport Document single-entity
+    ("container_logistics", "transport_document_next_event",       TransportDocumentNextEvent),
+    ("container_logistics", "transport_document_next_time",        TransportDocumentNextTime),
+    ("container_logistics", "transport_document_remaining_time",   TransportDocumentRemainingTime),
+    # container_logistics — Container × Transport Document pair
+    ("container_logistics", "container_td_pair_next_event", ContainerTDPairNextEvent),
+    ("container_logistics", "container_td_pair_next_time",  ContainerTDPairNextTime),
 )
 
 

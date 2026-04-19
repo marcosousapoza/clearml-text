@@ -1,121 +1,239 @@
+"""Order Management task definitions.
+
+Single-entity tasks on orders and products objects.
+Multi-entity tasks on customers × products observed pairs.
+
+Dataset stats: ~19 active orders/day, 428-day span, lifecycle median 7 days.
+Look-back 14 days. num_eval_timestamps=100 yields ~2k–4k train rows per task.
+"""
+
 import pandas as pd
 from pandas import Series
 from relbench.base import Database, Table, TaskType
-from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
+from relbench.metrics import accuracy, f1, mae, mse, r2, rmse, roc_auc
 
 from data.const import O2O_DST_COL, O2O_SRC_COL, OBJECT_TABLE
 from data.wrapper import check_dbs
 from .utils import (
     MEntityTask,
-    build_observed_pair_event_within_table,
-    build_observed_pair_future_event_count_table,
-    build_stage_future_event_count_table,
-    build_stage_multiclass_next_event_table,
+    build_generic_next_event_table,
+    build_generic_next_time_table,
+    build_generic_remaining_time_table,
+    build_generic_pair_next_event_table,
+    build_generic_pair_next_time_table,
 )
 
-ORDER_PAYMENT_OUTCOMES = ["pay order", "payment reminder"]
+ORDER_EVENT_TYPES = [
+    "confirm order",
+    "pay order",
+    "payment reminder",
+    "place order",
+    "send invoice",
+]
+
+PRODUCT_EVENT_TYPES = [
+    "confirm order",
+    "pay order",
+    "payment reminder",
+    "place order",
+    "send invoice",
+]
+
+CUSTOMER_PRODUCT_PAIR_EVENT_TYPES = [
+    "confirm order",
+    "pay order",
+    "payment reminder",
+    "place order",
+    "send invoice",
+]
+
+_LOOKBACK = pd.Timedelta(days=14)
+_FWD_NEXT = pd.Timedelta(days=14)
+_N_TIMESTAMPS = 100
 
 
-class OrderPaymentOutcome14Days(MEntityTask):
-    """After confirmation, does the order get paid or need a reminder next?"""
+# ---------------------------------------------------------------------------
+# Single-entity: orders
+# ---------------------------------------------------------------------------
 
-    timedelta = pd.Timedelta(days=14)
-    task_type = TaskType.MULTICLASS_CLASSIFICATION
-    object_types = ("orders",)
-    metrics = [accuracy, f1, roc_auc]
-    num_classes = len(ORDER_PAYMENT_OUTCOMES)
-    source_event_type = "confirm order"
-    next_event_types = ORDER_PAYMENT_OUTCOMES
-    source_max_age = timedelta
+class OrderNextEvent(MEntityTask):
+    """Next event type for an active order."""
+
+    timedelta           = _FWD_NEXT
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.MULTICLASS_CLASSIFICATION
+    object_types        = ("orders",)
+    num_classes         = len(ORDER_EVENT_TYPES)
+    metrics             = [accuracy, f1, roc_auc]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_multiclass_next_event_table(
+        df = build_generic_next_event_table(
             db=db,
             object_type="orders",
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            next_event_types=self.next_event_types,
-            source_max_age=self.source_max_age,
+            times=timestamps,
+            event_types=ORDER_EVENT_TYPES,
+            delta_back=_LOOKBACK,
+            delta_fwd=self.timedelta,
         )
         return self._make_table(df)
 
 
-class OrderFutureReminderCount14Days(MEntityTask):
-    """How many payment reminders remain for a confirmed order over 14 days?"""
+class OrderNextTime(MEntityTask):
+    """Seconds until the next event for an active order."""
 
-    timedelta = pd.Timedelta(days=14)
-    task_type = TaskType.REGRESSION
-    object_types = ("orders",)
-    metrics = [mae, mse, rmse, r2]
-    source_event_type = "confirm order"
-    target_event_type = "payment reminder"
-    source_max_age = timedelta
+    timedelta           = _FWD_NEXT
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.REGRESSION
+    object_types        = ("orders",)
+    metrics             = [mae, mse, rmse, r2]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_future_event_count_table(
+        df = build_generic_next_time_table(
             db=db,
             object_type="orders",
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            target_event_type=self.target_event_type,
-            source_max_age=self.source_max_age,
+            times=timestamps,
+            delta_back=_LOOKBACK,
         )
         return self._make_table(df)
 
 
-class CustomerProductRepeatOrderWithin7Days(MEntityTask):
-    """Observed customer-product pair: will it place another order within 7 days?"""
+class OrderRemainingTime(MEntityTask):
+    """Days until the final event in an active order's lifecycle."""
 
-    timedelta = pd.Timedelta(days=7)
-    source_max_age = pd.Timedelta(weeks=4)
-    task_type = TaskType.BINARY_CLASSIFICATION
-    object_types = ("customers", "products")
-    entity_cols = (O2O_SRC_COL, O2O_DST_COL)
-    entity_tables = (OBJECT_TABLE, OBJECT_TABLE)
-    metrics = [accuracy, f1, auprc, roc_auc]
-    source_event_type = "confirm order"
-    target_event_type = "place order"
+    timedelta           = _FWD_NEXT
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.REGRESSION
+    object_types        = ("orders",)
+    metrics             = [mae, mse, rmse, r2]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_observed_pair_event_within_table(
+        df = build_generic_remaining_time_table(
             db=db,
-            object_types=self.object_types,  # type: ignore[arg-type]
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            target_event_type=self.target_event_type,
-            source_max_age=self.source_max_age,
+            object_type="orders",
+            times=timestamps,
+            delta_back=_LOOKBACK,
         )
         return self._make_table(df)
 
 
-class CustomerProductFutureOrderCount14Days(MEntityTask):
-    """Observed customer-product pair: how many repeat orders arrive in 14 days?"""
+# ---------------------------------------------------------------------------
+# Single-entity: products
+# ---------------------------------------------------------------------------
 
-    timedelta = pd.Timedelta(days=14)
-    source_max_age = pd.Timedelta(weeks=4)
-    task_type = TaskType.REGRESSION
-    object_types = ("customers", "products")
-    entity_cols = (O2O_SRC_COL, O2O_DST_COL)
-    entity_tables = (OBJECT_TABLE, OBJECT_TABLE)
-    metrics = [mae, mse, rmse, r2]
-    source_event_type = "confirm order"
-    target_event_type = "place order"
+class ProductNextEvent(MEntityTask):
+    """Next event type for an active product."""
+
+    timedelta           = _FWD_NEXT
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.MULTICLASS_CLASSIFICATION
+    object_types        = ("products",)
+    num_classes         = len(PRODUCT_EVENT_TYPES)
+    metrics             = [accuracy, f1, roc_auc]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_observed_pair_future_event_count_table(
+        df = build_generic_next_event_table(
             db=db,
-            object_types=self.object_types,  # type: ignore[arg-type]
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            target_event_type=self.target_event_type,
-            source_max_age=self.source_max_age,
+            object_type="products",
+            times=timestamps,
+            event_types=PRODUCT_EVENT_TYPES,
+            delta_back=_LOOKBACK,
+            delta_fwd=self.timedelta,
+        )
+        return self._make_table(df)
+
+
+class ProductNextTime(MEntityTask):
+    """Seconds until the next event for an active product."""
+
+    timedelta           = _FWD_NEXT
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.REGRESSION
+    object_types        = ("products",)
+    metrics             = [mae, mse, rmse, r2]
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        df = build_generic_next_time_table(
+            db=db,
+            object_type="products",
+            times=timestamps,
+            delta_back=_LOOKBACK,
+        )
+        return self._make_table(df)
+
+
+class ProductRemainingTime(MEntityTask):
+    """Days until the final event in an active product's lifecycle."""
+
+    timedelta           = _FWD_NEXT
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.REGRESSION
+    object_types        = ("products",)
+    metrics             = [mae, mse, rmse, r2]
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        df = build_generic_remaining_time_table(
+            db=db,
+            object_type="products",
+            times=timestamps,
+            delta_back=_LOOKBACK,
+        )
+        return self._make_table(df)
+
+
+# ---------------------------------------------------------------------------
+# Multi-entity: customers × products observed pairs
+# ---------------------------------------------------------------------------
+
+class CustomerProductPairNextEvent(MEntityTask):
+    """Next shared event type for an observed customer–product pair."""
+
+    timedelta           = _FWD_NEXT
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.MULTICLASS_CLASSIFICATION
+    object_types        = ("customers", "products")
+    entity_cols         = (O2O_SRC_COL, O2O_DST_COL)
+    entity_tables       = (OBJECT_TABLE, OBJECT_TABLE)
+    num_classes         = len(CUSTOMER_PRODUCT_PAIR_EVENT_TYPES)
+    metrics             = [accuracy, f1, roc_auc]
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        df = build_generic_pair_next_event_table(
+            db=db,
+            src_type="customers",
+            dst_type="products",
+            times=timestamps,
+            event_types=CUSTOMER_PRODUCT_PAIR_EVENT_TYPES,
+            delta_back=_LOOKBACK,
+            delta_fwd=self.timedelta,
+        )
+        return self._make_table(df)
+
+
+class CustomerProductPairNextTime(MEntityTask):
+    """Seconds until the next shared event for an observed customer–product pair."""
+
+    timedelta           = _FWD_NEXT
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.REGRESSION
+    object_types        = ("customers", "products")
+    entity_cols         = (O2O_SRC_COL, O2O_DST_COL)
+    entity_tables       = (OBJECT_TABLE, OBJECT_TABLE)
+    metrics             = [mae, mse, rmse, r2]
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        df = build_generic_pair_next_time_table(
+            db=db,
+            src_type="customers",
+            dst_type="products",
+            times=timestamps,
+            delta_back=_LOOKBACK,
         )
         return self._make_table(df)

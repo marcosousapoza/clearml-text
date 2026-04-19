@@ -1,132 +1,195 @@
+"""BPI2019 task definitions.
+
+Single-entity tasks on POItem objects (dominant lifecycle entity).
+Multi-entity tasks on POItem × Vendor observed pairs.
+
+Dataset stats: ~3400 active POItems/day, 382-day span, lifecycle median 64 days.
+Look-back 3 days keeps only freshly active items (~500–1000 active per timestamp).
+num_eval_timestamps=15 yields ~50k train rows per task.
+"""
+
 import pandas as pd
 from pandas import Series
 from relbench.base import Database, Table, TaskType
 from relbench.metrics import accuracy, f1, mae, mse, r2, rmse, roc_auc
 
+from data.const import O2O_DST_COL, O2O_SRC_COL, OBJECT_TABLE
 from data.wrapper import check_dbs
 from .utils import (
     MEntityTask,
-    build_stage_future_distinct_related_count_table,
-    build_stage_horizon_attribute_value_table,
-    build_stage_multiclass_next_event_table,
-    build_stage_time_to_target_event_table,
+    build_generic_next_event_table,
+    build_generic_next_time_table,
+    build_generic_remaining_time_table,
+    build_generic_pair_next_event_table,
+    build_generic_pair_next_time_table,
 )
 
-
-POITEM_CREATION_OUTCOMES = [
-    "Vendor creates invoice",
-    "Record Goods Receipt",
-    "Change Quantity",
-]
-
-POITEM_INVOICE_RECEIPT_OUTCOMES = [
-    "Clear Invoice",
-    "Remove Payment Block",
-    "Record Goods Receipt",
+POITEM_EVENT_TYPES = [
+    "Block Purchase Order Item",
+    "Cancel Goods Receipt",
     "Cancel Invoice Receipt",
+    "Cancel Subsequent Invoice",
+    "Change Approval for Purchase Order",
+    "Change Delivery Indicator",
+    "Change Price",
+    "Change Quantity",
+    "Change Storage Location",
+    "Change payment term",
+    "Clear Invoice",
+    "Create Purchase Order Item",
+    "Create Purchase Requisition Item",
+    "Delete Purchase Order Item",
+    "Reactivate Purchase Order Item",
+    "Receive Order Confirmation",
+    "Record Goods Receipt",
+    "Record Invoice Receipt",
+    "Record Service Entry Sheet",
+    "Record Subsequent Invoice",
+    "Release Purchase Order",
+    "Release Purchase Requisition",
+    "Remove Payment Block",
+    "SRM: Created",
+    "SRM: Deleted",
+    "SRM: Document Completed",
+    "SRM: In Transfer to Execution Syst.",
+    "SRM: Ordered",
+    "SRM: Transaction Completed",
+    "SRM: Transfer Failed (E.Sys.)",
+    "Set Payment Block",
+    "Update Order Confirmation",
+    "Vendor creates debit memo",
+    "Vendor creates invoice",
 ]
 
-class POItemCreationOutcome7Days(MEntityTask):
-    """Branch after item creation: invoice, receipt, or quantity-change follow-up."""
+# Events that jointly involve a POItem and Vendor in the same event.
+POITEM_VENDOR_PAIR_EVENT_TYPES = [
+    "Clear Invoice",
+    "Record Invoice Receipt",
+    "Record Subsequent Invoice",
+    "Vendor creates debit memo",
+    "Vendor creates invoice",
+]
 
-    timedelta = pd.Timedelta(days=7)
-    task_type = TaskType.MULTICLASS_CLASSIFICATION
-    object_types = ("POItem",)
-    metrics = [accuracy, f1, roc_auc]
-    num_classes = len(POITEM_CREATION_OUTCOMES)
-    source_event_type = "Create Purchase Order Item"
-    next_event_types = POITEM_CREATION_OUTCOMES
-    source_max_age = timedelta
+_LOOKBACK = pd.Timedelta(days=3)
+_FWD_NEXT = pd.Timedelta(days=21, hours=8)
+_N_TIMESTAMPS = 15
+
+
+# ---------------------------------------------------------------------------
+# Single-entity: POItem
+# ---------------------------------------------------------------------------
+
+class POItemNextEvent(MEntityTask):
+    """Next event type for an active purchase order item."""
+
+    timedelta            = _FWD_NEXT
+    num_eval_timestamps  = _N_TIMESTAMPS
+    task_type            = TaskType.MULTICLASS_CLASSIFICATION
+    object_types         = ("POItem",)
+    num_classes          = len(POITEM_EVENT_TYPES)
+    metrics              = [accuracy, f1, roc_auc]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_multiclass_next_event_table(
+        df = build_generic_next_event_table(
             db=db,
             object_type="POItem",
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            next_event_types=self.next_event_types,
-            source_max_age=self.source_max_age,
+            times=timestamps,
+            event_types=POITEM_EVENT_TYPES,
+            delta_back=_LOOKBACK,
+            delta_fwd=self.timedelta,
         )
         return self._make_table(df)
 
 
-class POItemInvoiceReceiptOutcome7Days(MEntityTask):
-    """Operational follow-up after invoice receipt: clear, unblock, wait for goods, or cancel."""
+class POItemNextTime(MEntityTask):
+    """Seconds until the next event for an active purchase order item."""
 
-    timedelta = pd.Timedelta(days=7)
-    task_type = TaskType.MULTICLASS_CLASSIFICATION
-    object_types = ("POItem",)
-    metrics = [accuracy, f1, roc_auc]
-    num_classes = len(POITEM_INVOICE_RECEIPT_OUTCOMES)
-    source_event_type = "Record Invoice Receipt"
-    next_event_types = POITEM_INVOICE_RECEIPT_OUTCOMES
-    source_max_age = timedelta
+    timedelta            = _FWD_NEXT
+    num_eval_timestamps  = _N_TIMESTAMPS
+    task_type            = TaskType.REGRESSION
+    object_types         = ("POItem",)
+    metrics              = [mae, mse, rmse, r2]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_multiclass_next_event_table(
+        df = build_generic_next_time_table(
             db=db,
             object_type="POItem",
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            next_event_types=self.next_event_types,
-            source_max_age=self.source_max_age,
+            times=timestamps,
+            delta_back=_LOOKBACK,
         )
         return self._make_table(df)
 
 
-class POItemInvoicedNetWorth30Days(MEntityTask):
-    """After PO item creation, what net worth will be invoiced within 30 days?"""
+class POItemRemainingTime(MEntityTask):
+    """Days until the final event in an active purchase order item's lifecycle."""
 
-    timedelta = pd.Timedelta(days=30)
-    source_max_age = timedelta
-    task_type = TaskType.REGRESSION
-    object_types = ("POItem",)
-    metrics = [mae, mse, rmse, r2]
-    source_event_type = "Create Purchase Order Item"
-    target_event_type = "Record Invoice Receipt"
+    timedelta            = _FWD_NEXT
+    num_eval_timestamps  = _N_TIMESTAMPS
+    task_type            = TaskType.REGRESSION
+    object_types         = ("POItem",)
+    metrics              = [mae, mse, rmse, r2]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_horizon_attribute_value_table(
+        df = build_generic_remaining_time_table(
             db=db,
             object_type="POItem",
-            attribute_table_name="event_attr_Record Invoice Receipt",
-            attribute_col="eCumNetWorth",
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            target_event_type=self.target_event_type,
-            source_max_age=self.source_max_age,
+            times=timestamps,
+            delta_back=_LOOKBACK,
         )
         return self._make_table(df)
 
 
-class VendorFutureClearInvoiceItemCount7Days(MEntityTask):
-    """How many distinct PO items from this vendor will clear invoices soon?"""
+# ---------------------------------------------------------------------------
+# Multi-entity: POItem × Vendor observed pairs
+# ---------------------------------------------------------------------------
 
-    timedelta = pd.Timedelta(days=7)
-    task_type = TaskType.REGRESSION
-    object_types = ("Vendor",)
-    metrics = [mae, mse, rmse, r2]
-    source_event_type = "Vendor creates invoice"
-    target_event_type = "Clear Invoice"
-    related_object_type = "POItem"
-    source_max_age = timedelta
+class POItemVendorPairNextEvent(MEntityTask):
+    """Next shared event type for an observed POItem–Vendor pair."""
+
+    timedelta            = _FWD_NEXT
+    num_eval_timestamps  = _N_TIMESTAMPS
+    task_type            = TaskType.MULTICLASS_CLASSIFICATION
+    object_types         = ("POItem", "Vendor")
+    entity_cols          = (O2O_SRC_COL, O2O_DST_COL)
+    entity_tables        = (OBJECT_TABLE, OBJECT_TABLE)
+    num_classes          = len(POITEM_VENDOR_PAIR_EVENT_TYPES)
+    metrics              = [accuracy, f1, roc_auc]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_future_distinct_related_count_table(
+        df = build_generic_pair_next_event_table(
             db=db,
-            object_type="Vendor",
-            related_object_type=self.related_object_type,
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            target_event_type=self.target_event_type,
-            source_max_age=self.source_max_age,
+            src_type="POItem",
+            dst_type="Vendor",
+            times=timestamps,
+            event_types=POITEM_VENDOR_PAIR_EVENT_TYPES,
+            delta_back=_LOOKBACK,
+            delta_fwd=self.timedelta,
+        )
+        return self._make_table(df)
+
+
+class POItemVendorPairNextTime(MEntityTask):
+    """Seconds until the next shared event for an observed POItem–Vendor pair."""
+
+    timedelta            = _FWD_NEXT
+    num_eval_timestamps  = _N_TIMESTAMPS
+    task_type            = TaskType.REGRESSION
+    object_types         = ("POItem", "Vendor")
+    entity_cols          = (O2O_SRC_COL, O2O_DST_COL)
+    entity_tables        = (OBJECT_TABLE, OBJECT_TABLE)
+    metrics              = [mae, mse, rmse, r2]
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        df = build_generic_pair_next_time_table(
+            db=db,
+            src_type="POItem",
+            dst_type="Vendor",
+            times=timestamps,
+            delta_back=_LOOKBACK,
         )
         return self._make_table(df)

@@ -1,223 +1,241 @@
+"""Container Logistics task definitions.
+
+Single-entity tasks on Container and Transport Document objects.
+Multi-entity tasks on Container × Transport Document observed pairs.
+
+Dataset stats: ~23 active Containers/day, 457-day span, lifecycle median 14 days.
+Look-back 3 days (Container), 14 days (Transport Document).
+num_eval_timestamps=100 yields ~2k–5k train rows per task.
+"""
+
 import pandas as pd
 from pandas import Series
 from relbench.base import Database, Table, TaskType
-from relbench.metrics import accuracy, auprc, f1, mae, mse, r2, rmse, roc_auc
+from relbench.metrics import accuracy, f1, mae, mse, r2, rmse, roc_auc
 
 from data.const import O2O_DST_COL, O2O_SRC_COL, OBJECT_TABLE
 from data.wrapper import check_dbs
 from .utils import (
     MEntityTask,
-    build_observed_pair_event_within_table,
-    build_stage_future_distinct_related_count_table,
-    build_stage_future_event_count_table,
-    build_stage_horizon_attribute_multiclass_table,
-    build_stage_multiclass_next_event_table,
+    build_generic_next_event_table,
+    build_generic_next_time_table,
+    build_generic_remaining_time_table,
+    build_generic_pair_next_event_table,
+    build_generic_pair_next_time_table,
 )
 
-TD_STATUS_CLASSES = ["null", "in transit", "shipped"]
+CONTAINER_EVENT_TYPES = [
+    "Bring to Loading Bay",
+    "Depart",
+    "Drive to Terminal",
+    "Load Truck",
+    "Load to Vehicle",
+    "Pick Up Empty Container",
+    "Place in Stock",
+    "Reschedule Container",
+    "Weigh",
+]
+
+TRANSPORT_DOC_EVENT_TYPES = [
+    "Book Vehicles",
+    "Depart",
+    "Load to Vehicle",
+    "Order Empty Containers",
+    "Reschedule Container",
+]
+
+CONTAINER_TD_PAIR_EVENT_TYPES = [
+    "Depart",
+    "Load to Vehicle",
+    "Order Empty Containers",
+    "Reschedule Container",
+]
+
+_N_TIMESTAMPS = 100
 
 
-class ContainerLoadPhaseNextEvent4Hours(MEntityTask):
-    """Multiclass branch task inside the loading phase."""
+# ---------------------------------------------------------------------------
+# Single-entity: Container
+# ---------------------------------------------------------------------------
 
-    timedelta = pd.Timedelta(hours=4)
-    task_type = TaskType.MULTICLASS_CLASSIFICATION
-    object_types = ("Container",)
-    metrics = [accuracy, f1, roc_auc]
-    num_classes = 2
-    source_event_type = "Load Truck"
-    next_event_types = ["Load Truck", "Drive to Terminal"]
+class ContainerNextEvent(MEntityTask):
+    """Next event type for an active container."""
+
+    timedelta           = pd.Timedelta(hours=12)
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.MULTICLASS_CLASSIFICATION
+    object_types        = ("Container",)
+    num_classes         = len(CONTAINER_EVENT_TYPES)
+    metrics             = [accuracy, f1, roc_auc]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_multiclass_next_event_table(
+        df = build_generic_next_event_table(
             db=db,
             object_type="Container",
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            next_event_types=self.next_event_types,
-            source_max_age=self.timedelta,
+            times=timestamps,
+            event_types=CONTAINER_EVENT_TYPES,
+            delta_back=pd.Timedelta(days=3),
+            delta_fwd=self.timedelta,
         )
         return self._make_table(df)
 
 
-class VehicleBookingNextEvent7Days(MEntityTask):
-    """Multiclass vehicle booking progression task."""
+class ContainerNextTime(MEntityTask):
+    """Seconds until the next event for an active container."""
 
-    timedelta = pd.Timedelta(days=7)
-    task_type = TaskType.MULTICLASS_CLASSIFICATION
-    object_types = ("Vehicle",)
-    metrics = [accuracy, f1, roc_auc]
-    num_classes = 3
-    source_event_type = "Book Vehicles"
-    next_event_types = ["Book Vehicles", "Load to Vehicle", "Reschedule Container"]
+    timedelta           = pd.Timedelta(hours=12)
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.REGRESSION
+    object_types        = ("Container",)
+    metrics             = [mae, mse, rmse, r2]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_multiclass_next_event_table(
-            db=db,
-            object_type="Vehicle",
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            next_event_types=self.next_event_types,
-            source_max_age=None,
-        )
-        return self._make_table(df)
-
-
-class ContainerRemainingLoadTruckCount4Hours(MEntityTask):
-    """How many more truck-load events will this container see soon?"""
-
-    timedelta = pd.Timedelta(hours=4)
-    task_type = TaskType.REGRESSION
-    object_types = ("Container",)
-    metrics = [mae, mse, rmse, r2]
-    source_event_type = "Load Truck"
-    source_max_age = timedelta
-    target_event_type = "Load Truck"
-
-    @check_dbs
-    def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_future_event_count_table(
+        df = build_generic_next_time_table(
             db=db,
             object_type="Container",
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            target_event_type=self.target_event_type,
-            source_max_age=self.source_max_age,
+            times=timestamps,
+            delta_back=pd.Timedelta(days=3),
         )
         return self._make_table(df)
 
 
-class VehicleFutureContainerLoadCount7Days(MEntityTask):
-    """How many distinct containers will this booked vehicle load soon?"""
+class ContainerRemainingTime(MEntityTask):
+    """Days until the final event in an active container's lifecycle."""
 
-    timedelta = pd.Timedelta(days=7)
-    task_type = TaskType.REGRESSION
-    object_types = ("Vehicle",)
-    metrics = [mae, mse, rmse, r2]
-    source_event_type = "Book Vehicles"
-    target_event_type = "Load to Vehicle"
-    related_object_type = "Container"
+    timedelta           = pd.Timedelta(hours=12)
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.REGRESSION
+    object_types        = ("Container",)
+    metrics             = [mae, mse, rmse, r2]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_future_distinct_related_count_table(
+        df = build_generic_remaining_time_table(
             db=db,
-            object_type="Vehicle",
-            related_object_type=self.related_object_type,
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            target_event_type=self.target_event_type,
-            source_max_age=None,
+            object_type="Container",
+            times=timestamps,
+            delta_back=pd.Timedelta(days=3),
         )
         return self._make_table(df)
 
 
-class TransportDocumentFutureDepartContainerCount7Days(MEntityTask):
-    """How many distinct containers will depart under this document soon?"""
+# ---------------------------------------------------------------------------
+# Single-entity: Transport Document
+# ---------------------------------------------------------------------------
 
-    timedelta = pd.Timedelta(days=7)
-    task_type = TaskType.REGRESSION
-    object_types = ("Transport Document",)
-    metrics = [mae, mse, rmse, r2]
-    source_event_type = "Order Empty Containers"
-    target_event_type = "Depart"
-    related_object_type = "Container"
+class TransportDocumentNextEvent(MEntityTask):
+    """Next event type for an active transport document."""
+
+    timedelta           = pd.Timedelta(days=7)
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.MULTICLASS_CLASSIFICATION
+    object_types        = ("Transport Document",)
+    num_classes         = len(TRANSPORT_DOC_EVENT_TYPES)
+    metrics             = [accuracy, f1, roc_auc]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_future_distinct_related_count_table(
+        df = build_generic_next_event_table(
             db=db,
             object_type="Transport Document",
-            related_object_type=self.related_object_type,
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            target_event_type=self.target_event_type,
-            source_max_age=None,
+            times=timestamps,
+            event_types=TRANSPORT_DOC_EVENT_TYPES,
+            delta_back=pd.Timedelta(days=14),
+            delta_fwd=self.timedelta,
         )
         return self._make_table(df)
 
 
-class TransportDocumentStatusAfterOrder7Days(MEntityTask):
-    """Predict the transport document status reached by the 7-day horizon."""
+class TransportDocumentNextTime(MEntityTask):
+    """Seconds until the next event for an active transport document."""
 
-    timedelta = pd.Timedelta(days=7)
-    task_type = TaskType.MULTICLASS_CLASSIFICATION
-    object_types = ("Transport Document",)
-    metrics = [accuracy, f1, roc_auc]
-    num_classes = len(TD_STATUS_CLASSES)
-    source_event_type = "Order Empty Containers"
+    timedelta           = pd.Timedelta(days=7)
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.REGRESSION
+    object_types        = ("Transport Document",)
+    metrics             = [mae, mse, rmse, r2]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_stage_horizon_attribute_multiclass_table(
+        df = build_generic_next_time_table(
             db=db,
             object_type="Transport Document",
-            attribute_table_name="object_attr_Transport Document",
-            attribute_col="Status",
-            class_values=TD_STATUS_CLASSES,
-            timestamps=timestamps,
-            source_event_type=self.source_event_type,
-            source_max_age=None,
+            times=timestamps,
+            delta_back=pd.Timedelta(days=14),
         )
         return self._make_table(df)
 
 
-class TransportDocumentVehicleDepartWithin7Days(MEntityTask):
-    """Observed TD x Vehicle pair: will it co-depart within 7 days?"""
+class TransportDocumentRemainingTime(MEntityTask):
+    """Days until the final event in an active transport document's lifecycle."""
 
-    timedelta = pd.Timedelta(days=7)
-    source_max_age = pd.Timedelta(weeks=4)
-    task_type = TaskType.BINARY_CLASSIFICATION
-    object_types = ("Transport Document", "Vehicle")
-    entity_cols = (O2O_SRC_COL, O2O_DST_COL)
-    entity_tables = (OBJECT_TABLE, OBJECT_TABLE)
-    metrics = [accuracy, f1, auprc, roc_auc]
-    source_event_type = "Book Vehicles"
-    target_event_type = "Depart"
+    timedelta           = pd.Timedelta(days=7)
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.REGRESSION
+    object_types        = ("Transport Document",)
+    metrics             = [mae, mse, rmse, r2]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_observed_pair_event_within_table(
+        df = build_generic_remaining_time_table(
             db=db,
-            object_types=self.object_types, # type: ignore
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            target_event_type=self.target_event_type,
-            source_max_age=self.source_max_age,
+            object_type="Transport Document",
+            times=timestamps,
+            delta_back=pd.Timedelta(days=14),
         )
         return self._make_table(df)
 
 
-class TransportDocumentContainerDepartWithin7Days(MEntityTask):
-    """Observed TD x Container pair: will it co-depart within 7 days?"""
+# ---------------------------------------------------------------------------
+# Multi-entity: Container × Transport Document observed pairs
+# ---------------------------------------------------------------------------
 
-    timedelta = pd.Timedelta(days=7)
-    source_max_age = pd.Timedelta(weeks=4)
-    task_type = TaskType.BINARY_CLASSIFICATION
-    object_types = ("Transport Document", "Container")
-    entity_cols = (O2O_SRC_COL, O2O_DST_COL)
-    entity_tables = (OBJECT_TABLE, OBJECT_TABLE)
-    metrics = [accuracy, f1, auprc, roc_auc]
-    source_event_type = "Order Empty Containers"
-    target_event_type = "Depart"
+class ContainerTDPairNextEvent(MEntityTask):
+    """Next shared event type for an observed Container–Transport Document pair."""
+
+    timedelta           = pd.Timedelta(days=7)
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.MULTICLASS_CLASSIFICATION
+    object_types        = ("Container", "Transport Document")
+    entity_cols         = (O2O_SRC_COL, O2O_DST_COL)
+    entity_tables       = (OBJECT_TABLE, OBJECT_TABLE)
+    num_classes         = len(CONTAINER_TD_PAIR_EVENT_TYPES)
+    metrics             = [accuracy, f1, roc_auc]
 
     @check_dbs
     def make_table(self, db: Database, timestamps: Series) -> Table:
-        df = build_observed_pair_event_within_table(
+        df = build_generic_pair_next_event_table(
             db=db,
-            object_types=self.object_types, # type: ignore
-            timestamps=timestamps,
-            delta=self.timedelta,
-            source_event_type=self.source_event_type,
-            target_event_type=self.target_event_type,
-            source_max_age=self.source_max_age,
+            src_type="Container",
+            dst_type="Transport Document",
+            times=timestamps,
+            event_types=CONTAINER_TD_PAIR_EVENT_TYPES,
+            delta_back=pd.Timedelta(days=14),
+            delta_fwd=self.timedelta,
+        )
+        return self._make_table(df)
+
+
+class ContainerTDPairNextTime(MEntityTask):
+    """Seconds until the next shared event for an observed Container–Transport Document pair."""
+
+    timedelta           = pd.Timedelta(days=7)
+    num_eval_timestamps = _N_TIMESTAMPS
+    task_type           = TaskType.REGRESSION
+    object_types        = ("Container", "Transport Document")
+    entity_cols         = (O2O_SRC_COL, O2O_DST_COL)
+    entity_tables       = (OBJECT_TABLE, OBJECT_TABLE)
+    metrics             = [mae, mse, rmse, r2]
+
+    @check_dbs
+    def make_table(self, db: Database, timestamps: Series) -> Table:
+        df = build_generic_pair_next_time_table(
+            db=db,
+            src_type="Container",
+            dst_type="Transport Document",
+            times=timestamps,
+            delta_back=pd.Timedelta(days=14),
         )
         return self._make_table(df)

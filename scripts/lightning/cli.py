@@ -17,7 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset", type=str, default="rel-event")
     parser.add_argument("--task", type=str, default="user-attendance")
     parser.add_argument("--lr", type=float, default=0.01)
-    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--channels", type=int, default=48)
     parser.add_argument("--num-layers", type=int, default=3)

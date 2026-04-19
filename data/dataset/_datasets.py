@@ -324,7 +324,7 @@ class BPI2019(OCELDataset):
     """
 
     val_timestamp = pd.Timestamp("2018-09-20 06:00:00")
-    test_timestamp = pd.Timestamp("2018-11-15 06:00:00")
+    test_timestamp = pd.Timestamp("2018-10-18 06:00:00")
 
     _uri = "https://data.4tu.nl/file/46a7e15b-10c7-4ab2-988d-ee67d8ea515a/ae11f6ca-2824-407d-98ea-ec8bc456e714"
     _file_format = "json"

@@ -1,5 +1,12 @@
 from .custom import MEntityTask, add_task_to_database, build_target_tensor
 from .db_utils import ocel_connection
+from .generic_builders import (
+    build_generic_next_event_table,
+    build_generic_next_time_table,
+    build_generic_remaining_time_table,
+    build_generic_pair_next_event_table,
+    build_generic_pair_next_time_table,
+)
 from .process_targets import (
     build_observed_pair_event_within_table,
     build_observed_pair_future_event_count_table,
@@ -26,6 +33,11 @@ __all__ = [
     "add_task_to_database",
     "build_target_tensor",
     "ocel_connection",
+    "build_generic_next_event_table",
+    "build_generic_next_time_table",
+    "build_generic_remaining_time_table",
+    "build_generic_pair_next_event_table",
+    "build_generic_pair_next_time_table",
     "build_observed_pair_event_within_table",
     "build_observed_pair_future_event_count_table",
     "build_stage_future_distinct_related_count_table",
