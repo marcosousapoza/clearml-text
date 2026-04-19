@@ -2,7 +2,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
 from torch import Tensor
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Sampler
+from relbench.base import TaskType
 
 from torch_geometric.data import Data, HeteroData
 from torch_geometric.loader.utils import filter_data, filter_hetero_data, get_input_nodes
@@ -14,6 +15,81 @@ from torch_geometric.sampler import (
 )
 from torch_geometric.sampler.base import SubgraphType
 from torch_geometric.typing import EdgeType, InputNodes, OptTensor
+
+
+class BalancedUnderSampler(Sampler[int]):
+    """Train-time undersampler for classification and regression targets.
+
+    Classification targets are balanced per discrete class.
+    Regression targets are first binned by quantiles, then balanced per bin.
+    """
+
+    def __init__(
+        self,
+        targets: Tensor,
+        task_type: TaskType,
+        num_regression_bins: int = 10,
+    ) -> None:
+        if targets.ndim != 1:
+            raise ValueError("BalancedUnderSampler requires 1D targets")
+
+        if task_type in (
+            TaskType.BINARY_CLASSIFICATION,
+            TaskType.MULTICLASS_CLASSIFICATION,
+        ):
+            group_ids = self._classification_groups(targets)
+        elif task_type == TaskType.REGRESSION:
+            group_ids = self._regression_groups(targets, num_regression_bins)
+        else:
+            raise ValueError(
+                "BalancedUnderSampler supports binary classification, "
+                "multiclass classification, and regression tasks"
+            )
+
+        _, inverse = torch.unique(group_ids, sorted=True, return_inverse=True)
+        self.group_indices = [
+            torch.nonzero(inverse == group_idx, as_tuple=False).view(-1)
+            for group_idx in range(int(inverse.max().item()) + 1)
+        ]
+        self.group_indices = [indices for indices in self.group_indices if indices.numel() > 0]
+
+        if len(self.group_indices) < 2:
+            raise ValueError("BalancedUnderSampler requires at least two populated groups")
+
+        self.samples_per_group = min(indices.numel() for indices in self.group_indices)
+        self.num_samples = self.samples_per_group * len(self.group_indices)
+
+    @staticmethod
+    def _classification_groups(targets: Tensor) -> Tensor:
+        return targets.to(torch.long)
+
+    @staticmethod
+    def _regression_groups(targets: Tensor, num_bins: int) -> Tensor:
+        targets = targets.to(torch.float32)
+        if targets.numel() < 2:
+            raise ValueError("BalancedUnderSampler requires at least two regression targets")
+
+        quantiles = torch.linspace(0.0, 1.0, steps=num_bins + 1, device=targets.device)
+        boundaries = torch.quantile(targets, quantiles)
+        boundaries = torch.unique(boundaries)
+        if boundaries.numel() < 2:
+            raise ValueError("BalancedUnderSampler could not form regression quantile bins")
+
+        inner_boundaries = boundaries[1:-1]
+        return torch.bucketize(targets, inner_boundaries, right=False)
+
+    def __iter__(self):
+        sampled_indices = []
+        for indices in self.group_indices:
+            perm = torch.randperm(indices.numel())[: self.samples_per_group]
+            sampled_indices.append(indices[perm])
+
+        epoch_indices = torch.cat(sampled_indices, dim=0)
+        epoch_indices = epoch_indices[torch.randperm(epoch_indices.numel())]
+        return iter(epoch_indices.tolist())
+
+    def __len__(self) -> int:
+        return self.num_samples
 
 
 class TupleNeighborLoader(DataLoader):

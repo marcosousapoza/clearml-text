@@ -19,7 +19,7 @@ from data.graph import make_ocel_graph
 from scripts.text_embedder import SentenceTextEmbedding
 from task.utils import MEntityTask, build_target_tensor
 
-from .sampler import TupleNeighborLoader
+from .sampler import BalancedUnderSampler, TupleNeighborLoader
 
 
 def _build_num_neighbors(num_neighbors_base: int, num_layers: int) -> list[int]:
@@ -140,6 +140,15 @@ class RelbenchLightningDataModule(L.LightningDataModule):
             time_tensor = torch.from_numpy(to_unix_time(split_df[task.time_col]))
             input_time_tuple = [time_tensor] * tuple_arity
             targets = build_target_tensor(task, split_df)
+            sampler = None
+            shuffle = split == "train"
+
+            if split == "train":
+                try:
+                    sampler = BalancedUnderSampler(targets, task.task_type)
+                    shuffle = False
+                except ValueError:
+                    sampler = None
 
             self._loader_dict[split] = TupleNeighborLoader(
                 data,
@@ -151,7 +160,8 @@ class RelbenchLightningDataModule(L.LightningDataModule):
                 temporal_strategy=self.temporal_strategy,
                 disjoint=True,
                 batch_size=self.batch_size,
-                shuffle=split == "train",
+                shuffle=shuffle,
+                sampler=sampler,
                 num_workers=self.num_workers,
                 persistent_workers=self.num_workers > 0,
             )
