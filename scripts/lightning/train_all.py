@@ -43,6 +43,12 @@ def main(argv: list[str] | None = None) -> None:
         default=[],
         help="Dataset name to train. Repeat to select multiple datasets. Defaults to all datasets.",
     )
+    parser.add_argument(
+        "--task",
+        action="append",
+        default=[],
+        help="Task name to train. Repeat to select multiple tasks. Defaults to all tasks for the selected dataset(s).",
+    )
     parser.add_argument("--flatten", action="store_true", help="Flatten databases to each task's object types.")
     parser.add_argument("--accelerator", type=str, default=None, help="Accelerator override (e.g. cpu, gpu). Defaults to gpu if available, else cpu.")
     parser.add_argument("--lr", type=float, default=None, help="Learning rate override. Defaults to the scripts.lightning default.")
@@ -63,6 +69,7 @@ def main(argv: list[str] | None = None) -> None:
     jobs = _build_jobs(
         accelerator,
         set(args.dataset),
+        set(args.task),
         args.flatten,
         args.lr,
         args.patience,
@@ -83,6 +90,7 @@ def main(argv: list[str] | None = None) -> None:
 def _build_jobs(
     accelerator: str,
     datasets: set[str],
+    tasks: set[str],
     flatten: bool,
     lr: float | None = None,
     patience: int | None = None,
@@ -101,8 +109,27 @@ def _build_jobs(
             f"Available datasets: {', '.join(sorted(available_datasets))}."
         )
 
-    for dataset, task, _task_cls in TASK_SPECS:
-        if datasets and dataset not in datasets:
+    selected_specs = [
+        (dataset, task, task_cls)
+        for dataset, task, task_cls in TASK_SPECS
+        if not datasets or dataset in datasets
+    ]
+    available_tasks = {task for _dataset, task, _task_cls in selected_specs}
+    unknown_tasks = tasks - available_tasks
+    if unknown_tasks:
+        dataset_scope = (
+            f"selected dataset(s) {', '.join(sorted(datasets))}"
+            if datasets
+            else "all datasets"
+        )
+        raise ValueError(
+            f"Unknown task(s) for {dataset_scope}: "
+            f"{', '.join(sorted(unknown_tasks))}. "
+            f"Available tasks: {', '.join(sorted(available_tasks))}."
+        )
+
+    for dataset, task, _task_cls in selected_specs:
+        if tasks and task not in tasks:
             continue
         for seed in TRAIN_ALL_SEEDS:
             command, log_path = _build_command(
