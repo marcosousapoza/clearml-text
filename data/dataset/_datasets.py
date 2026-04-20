@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 from typing import Any
 
 import pandas as pd
@@ -7,6 +8,7 @@ from relbench.base.database import Database
 from relbench.base.table import Table
 from torch_frame import stype
 
+from ..cache import cache_lock
 from ._utils import (
     from_event_time,
     parse_ocel_to_database,
@@ -46,6 +48,14 @@ class OCELDataset(Dataset):
     """Base dataset that owns its stype post-processing."""
 
     semantic_rename_dictionary: dict[str, object] = {}
+
+    @lru_cache(maxsize=None)
+    def get_db(self, upto_test_timestamp: bool = True) -> Database:
+        db_cache_dir = (
+            os.path.join(self.cache_dir, "db") if self.cache_dir is not None else None
+        )
+        with cache_lock(db_cache_dir):
+            return super().get_db(upto_test_timestamp)
 
     @classmethod
     def get_semantic_rename_dictionary(cls) -> dict[str, object]:

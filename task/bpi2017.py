@@ -78,8 +78,10 @@ _OFFER_EVENTS = [
 # Negative-outcome events used for the binary within-window task
 _APPLICATION_DENIAL_EVENTS = ["A_Denied", "A_Cancelled"]
 
-# Events where an Application and Offer co-appear (used for pair task)
-_APPLICATION_OFFER_EVENTS = [
+# Events where a Case_R and Offer co-appear (used for pair task). BPI2017 does
+# not directly attach Application and Offer objects to the same events; offers
+# co-occur with their Case_R object instead.
+_CASE_OFFER_EVENTS = [
     "O_Create Offer",
     "O_Created",
     "O_Sent (mail and online)",
@@ -312,37 +314,42 @@ class ApplicationDeniedWithin14d(MEntityTask):
 
 
 # ---------------------------------------------------------------------------
-# Task 8 — Application × Offer pair: will they co-appear within 14 days?
+# Task 8 — Case_R × Offer pair: will they co-appear within 14 days?
 #
-# Business meaning : Given an application and an offer observed together
+# Business meaning : Given a case and an offer observed together
 #                    recently, will they co-appear in a future offer-lifecycle
 #                    event within the next two weeks?  Useful for predicting
-#                    which applications will generate renewed offer activity.
-# Entity columns   : object_id (Application), object_id_partner (Offer)
-# Signal           : Applications that have recently received or returned an
+#                    which cases will generate renewed offer activity.
+# Entity columns   : object_id (Case_R), object_id_partner (Offer)
+# Signal           : Cases that have recently received or returned an
 #                    offer are more likely to generate further offer activity;
 #                    historical co-occurrence is a strong predictor.
 # ---------------------------------------------------------------------------
 
 class ApplicationOfferPairInteraction(MEntityTask):
-    """Binary: application–offer pair co-appears in a future offer event."""
+    """Binary: case-offer pair co-appears in a future offer event.
+
+    The registered task name remains ``application_offer_pair`` for backwards
+    compatibility with existing experiment scripts.
+    """
 
     timedelta      = _DELTA
     task_type      = TaskType.BINARY_CLASSIFICATION
     entity_cols    = (OBJECT_ID_COL, _PAIR_COL)
     entity_tables  = (OBJECT_TABLE, OBJECT_TABLE)
-    object_types   = ("Application", "Offer")
+    object_types   = ("Case_R", "Offer")
     metrics        = [accuracy, f1, roc_auc]
 
     def make_table(self, db: Database, timestamps: pd.Series) -> Table:
         df = build_pair_interaction_table(
             db,
-            src_type                = "Application",
+            src_type                = "Case_R",
             dst_type                = "Offer",
             times                   = timestamps,
-            interaction_event_types = _APPLICATION_OFFER_EVENTS,
+            interaction_event_types = _CASE_OFFER_EVENTS,
             delta_back              = _BACK_30,
             delta_fwd               = _FWD_14,
             pair_col                = _PAIR_COL,
+            max_negatives_per_positive = 10,
         )
         return to_relbench_table(df, self.entity_cols, self.entity_tables)

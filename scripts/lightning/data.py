@@ -208,6 +208,12 @@ class RelbenchLightningDataModule(L.LightningDataModule):
             split_df = task.get_table(split, mask_input_cols=False).df
             split_df = _remap_entity_columns(split_df, task, pkey_mappings)
             split_df = split_df.sort_values(task.time_col, kind="stable").reset_index(drop=True)
+            if split_df.empty:
+                raise ValueError(
+                    f"Task {self.dataset_name!r}/{self.task_name!r} produced an empty "
+                    f"{split!r} split. If this task was recently changed, clear and "
+                    f"rebuild its cached task tables."
+                )
 
             input_nodes_tuple = [
                 (

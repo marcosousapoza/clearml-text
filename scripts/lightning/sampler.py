@@ -45,6 +45,8 @@ class BalancedUnderSampler(Sampler[int]):
                 "BalancedUnderSampler supports binary classification, "
                 "multiclass classification, and regression tasks"
             )
+        if group_ids.numel() == 0:
+            raise ValueError("BalancedUnderSampler requires at least one target")
 
         _, inverse = torch.unique(group_ids, sorted=True, return_inverse=True)
         self.group_indices = [

@@ -1,3 +1,5 @@
+import os
+from functools import lru_cache
 from typing import Any, Callable
 
 import numpy as np
@@ -11,6 +13,7 @@ from relbench.modeling.graph import (
     NodeTrainTableInput,
     to_unix_time,
 )
+from data.cache import cache_lock
 from data.const import OBJECT_ID_COL, OBJECT_TABLE, TIME_COL
 from task.metrics import roc_auc
 
@@ -97,6 +100,14 @@ class MEntityTask(BaseTask):
     task_type: TaskType
     object_types: tuple[str, ...]
     num_eval_timestamps: int = 1000 # very large number to generate all validation observations
+
+    @lru_cache(maxsize=None)
+    def get_table(self, split: str, mask_input_cols: bool | None = None) -> Table:
+        split_cache_dir = (
+            os.path.join(self.cache_dir, split) if self.cache_dir is not None else None
+        )
+        with cache_lock(split_cache_dir):
+            return super().get_table(split, mask_input_cols)
 
     def filter_dangling_entities(self, table: Table) -> Table:
         db = self.dataset.get_db(upto_test_timestamp=False)

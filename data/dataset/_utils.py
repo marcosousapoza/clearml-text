@@ -10,7 +10,7 @@ from urllib3.util.retry import Retry
 from relbench.base.database import Database
 from relbench.base.table import Table
 
-from ..cache import RAW_OCEL_DIRNAME, get_cache_root
+from ..cache import RAW_OCEL_DIRNAME, cache_lock, cache_locked, get_cache_root
 from ..const import (
     E2O_EVENT_ID_COL,
     E2O_OBJECT_ID_COL,
@@ -130,7 +130,7 @@ def unzip_file(zip_path: str, extract_to: Optional[str] = None) -> None:
         zip_ref.extractall(extract_to)
 
 
-def download_file(uri: str, cache_dir: str) -> str:
+def _download_file_unlocked(uri: str, cache_dir: str) -> str:
     """
     Download file from URI to cache directory.
     Returns the path to the downloaded file.
@@ -172,6 +172,15 @@ def download_file(uri: str, cache_dir: str) -> str:
                 f.write(chunk)
 
     return download_path
+
+
+@cache_locked(lambda uri, cache_dir: cache_dir)
+def download_file(uri: str, cache_dir: str) -> str:
+    """
+    Download file from URI to cache directory under a cache-directory lock.
+    Returns the path to the downloaded file.
+    """
+    return _download_file_unlocked(uri, cache_dir)
 
 
 def get_parser(path: str, file_format: str) -> BaseDataReader:
@@ -216,17 +225,15 @@ def parse_ocel_to_database(
     """
     cache_dir = str(get_cache_root() / RAW_OCEL_DIRNAME)
 
-    # Download file
-    download_path = download_file(uri, cache_dir)
+    with cache_lock(cache_dir):
+        download_path = _download_file_unlocked(uri, cache_dir)
 
-    # Pre-parse if needed (e.g., unzip)
-    if pre_parse_fn is not None:
-        parse_path = pre_parse_fn(download_path)
-    else:
-        parse_path = download_path
+        if pre_parse_fn is not None:
+            parse_path = pre_parse_fn(download_path)
+        else:
+            parse_path = download_path
 
-    # Parse to database
-    parser = get_parser(parse_path, file_format)
-    return parser.parse_tables(
-        dataset_name=dataset_name,
-    )
+        parser = get_parser(parse_path, file_format)
+        return parser.parse_tables(
+            dataset_name=dataset_name,
+        )

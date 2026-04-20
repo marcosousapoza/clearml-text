@@ -23,6 +23,7 @@ from torch_geometric.sampler.utils import sort_csc
 from relbench.base import Database
 from relbench.modeling.graph import make_pkey_fkey_graph
 
+from .cache import cache_lock
 from .const import (
     E2O_TABLE,
     E2O_EVENT_ID_COL,
@@ -33,7 +34,6 @@ from .const import (
     O2O_DST_COL,
     O2O_SRC_COL,
 )
-
 
 def _is_uninformative(db: Database, table_name: str) -> bool:
     """Return True when a bridge table has no usable attribute columns.
@@ -121,12 +121,13 @@ def make_ocel_graph(
         ``(data, col_stats_dict)`` — same contract as
         ``make_pkey_fkey_graph``.
     """
-    data, col_stats_dict = make_pkey_fkey_graph(
-        db,
-        col_to_stype_dict=col_to_stype_dict,
-        text_embedder_cfg=text_embedder_cfg,
-        cache_dir=cache_dir,
-    )
+    with cache_lock(cache_dir):
+        data, col_stats_dict = make_pkey_fkey_graph(
+            db,
+            col_to_stype_dict=col_to_stype_dict,
+            text_embedder_cfg=text_embedder_cfg,
+            cache_dir=cache_dir,
+        )
 
     metapaths: list[list[tuple[str, str, str]]] = []
 

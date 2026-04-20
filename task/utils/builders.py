@@ -326,6 +326,7 @@ def build_pair_interaction_table(
     delta_back: pd.Timedelta = pd.Timedelta(days=30),
     delta_fwd: pd.Timedelta = pd.Timedelta(days=14),
     pair_col: str = "object_id_partner",
+    max_negatives_per_positive: int | None = None,
 ) -> pd.DataFrame:
     """Enumerate observed (src, dst) pairs active at obs_time; label = 1 if
     they co-appear in a future interaction event within delta_fwd."""
@@ -377,7 +378,48 @@ def build_pair_interaction_table(
 
     if not parts:
         return pd.DataFrame(columns=[OBJECT_ID_COL, pair_col, TIME_COL, "target"])
-    return pd.concat(parts, ignore_index=True)
+    df = pd.concat(parts, ignore_index=True)
+    if max_negatives_per_positive is None:
+        return df
+    return _cap_binary_negatives(
+        df,
+        max_negatives_per_positive=max_negatives_per_positive,
+        key_cols=[OBJECT_ID_COL, pair_col, TIME_COL],
+    )
+
+
+def _cap_binary_negatives(
+    df: pd.DataFrame,
+    *,
+    max_negatives_per_positive: int,
+    key_cols: list[str],
+) -> pd.DataFrame:
+    if max_negatives_per_positive < 1:
+        raise ValueError("max_negatives_per_positive must be at least 1")
+
+    positives = df[df["target"] == 1]
+    negatives = df[df["target"] == 0]
+    max_negatives = len(positives) * max_negatives_per_positive
+    if positives.empty or len(negatives) <= max_negatives:
+        return df
+
+    hash_cols = [col for col in key_cols if col in negatives.columns]
+    sampled_negatives = (
+        negatives.assign(
+            __sample_hash__=pd.util.hash_pandas_object(
+                negatives[hash_cols],
+                index=False,
+            )
+        )
+        .sort_values("__sample_hash__", kind="stable")
+        .head(max_negatives)
+        .drop(columns="__sample_hash__")
+    )
+    return (
+        pd.concat([positives, sampled_negatives], ignore_index=True)
+        .sort_values(key_cols, kind="stable")
+        .reset_index(drop=True)
+    )
 
 
 # ---------------------------------------------------------------------------
